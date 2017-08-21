@@ -1,239 +1,191 @@
+#
+# Couchbase Config
+#
+
+# IP address or hostname of the local Couchbase node as configured in Couchbase
 couchbase_host: 192.168.61.102
-port: 8091
-user: Administrator
-password: password
-buckets: all
-ssl: False
 
-nsca_path: /usr/sbin/nsca
-nagios_host: localhost
+# Couchbase admin port
+# 8091 (non-SSL)
+# 18091 (SSL)
+port: 18091
 
-metrics: 
-  - metric: cmd_get
-    description: Gets per second
-    warn: 1
-    crit: 2
-  - metric: cmd_set
-    description: 
-    warn: 
-    crit: 
-  - metric: couch_docs_fragmentation
-    description: 
-    warn: 
-    crit: 
-  - metric: couch_views_fragmentation
-    description:
-    warn:
-    crit:
-  - metric: curr_connections
-    description:
-    warn:
-    crit:
-  - metric: curr_items
-    description:
-    warn:
-    crit:
-  - metric: decr_hits
-    description:
-    warn:
-    crit:
-  - metric: decr_misses
-    description:
-    warn:
-    crit:
-  - metric: delete_hits
-    description:
-    warn:
-    crit:
-  - metric: delete_misses
-    description:
-    warn:
-    crit:
-  - metric: ep_bg_fetched
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_2i_items_remaining
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_other_backoff
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_other_count
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_other_items_remaining
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_other_items_sent
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_other_producer_count
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_other_total_bytes
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_replica_backoff
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_replica_count
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_replica_items_remaining
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_replica_items_sent
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_replica_total_bytes
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_xdcr_backoff
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_xdcr_count
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_xdcr_items_remaining
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_xdcr_items_sent
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_xdcr_producer_count
-    description:
-    warn:
-    crit:
-  - metric: ep_dcp_xdcr_total_bytes
-    description:
-    warn:
-    crit:
-  - metric: ep_diskqueue_drain
-    description:
-    warn:
-    crit:
-  - metric: ep_diskqueue_fill
-    description:
-    warn:
-    crit:
-  - metric: ep_diskqueue_items
-    description:
-    warn:
-    crit:
-  - metric: ep_flusher_todo
-    description:
-    warn:
-    crit:
-  - metric: ep_kv_size
-    description:
-    warn:
-    crit:
-  - metric: ep_mem_high_wat
-    description:
-    warn:
-    crit:
-  - metric: ep_oom_errors
-    description:
-    warn:
-    crit:
-  - metric: ep_queue_size
-    description:
-    warn:
-    crit:
-  - metric: ep_resident_items_rate
-    description:
-    warn:
-    crit:
-  - metric: ep_tmp_oom_errors
-    description:
-    warn:
-    crit:
-  - metric: incr_hits
-    description:
-    warn:
-    crit:
-  - metric: incr_misses
-    description:
-    warn:
-    crit:
-  - metric: mem_used
-    description:
-    warn:
-    crit:
-  - metric: vb_active_queue_age
-    description:
-    warn:
-    crit:
-  - metric: vb_active_queue_drain
-    description:
-    warn:
-    crit:
-  - metric: vb_active_queue_fill
-    description:
-    warn:
-    crit:
-  - metric: vb_active_queue_size
-    description:
-    warn:
-    crit:
-  - metric: vb_active_resident_items_ratio
-    description:
-    warn:
-    crit:
-  - metric: vb_avg_total_queue_age
-    description:
-    warn:
-    crit:
-  - metric: vb_pending_queue_age
-    description:
-    warn:
-    crit:
-  - metric: vb_pending_queue_drain
-    description:
-    warn:
-    crit:
-  - metric: vb_pending_queue_fill
-    description:
-    warn:
-    crit:
-  - metric: vb_pending_queue_size
-    description:
-    warn:
-    crit:
-  - metric: vb_replica_queue_age
-    description:
-    warn:
-    crit:
-  - metric: vb_replica_queue_drain
-    description:
-    warn:
-    crit:
-  - metric: vb_replica_queue_fill
-    description:
-    warn:
-    crit:
-  - metric: vb_replica_queue_size
-    description:
-    warn:
-    crit:
-  - metric: vb_replica_resident_items_ratio
-    description:
-    warn:
-    crit:
+# Admin username
+# It is recommended to use...
+# Couchbase < 5.0:  Read-Only Administrator
+# Couchbase 5.0+: Data Monitoring role
+user: readonly
+
+# Admin password
+password: secret
+
+# Use SSL when talking to Couchbase
+ssl: True
+
+
+#
+# Nagios Config
+#
+#
+
+# IP address or hostname of the Nagios server
+nagios_host: 10.0.2.2
+
+# NSCA password as set on the Nagios server
+# Typicaly found in nsca.cfg or nsca-ng.cfg
+nsca_password: secret
+
+# Path to the send_nsca binary
+nsca_path: /sbin/send_nsca 
+
+
+#
+# Monitoring Options
+#
+
+# Include the cluster name in the service description
+# Format will be: {prefix} {cluster} {bucket} - {metric description}
+include_cluster_name: True
+
+# Include the bucket name in the service description
+# Format will be: {prefix} {cluster} {bucket} - {metric description}
+include_bucket_name: True
+
+# Metrics by bucket
+# Special name _all will evaluate the configured metrics and thresholds for all buckets
+# Name your buckets individually to customize the metrics and thresholds by bucket
+buckets: 
+  - name: _all
+    metrics:
+    - metric: cmd_get
+      description: gets per second
+      warn: 5000
+      crit: 10000
+    - metric: cmd_set
+      description: sets per second 
+      warn: 5000 
+      crit: 10000 
+    - metric: couch_docs_fragmentation
+      description: document data fragmentation 
+      warn: 35 
+      crit: 50
+    - metric: couch_views_fragmentation
+      description: views fragmentation
+      warn: 35
+      crit: 50
+    - metric: curr_connections
+      description: connections
+      warn: 500
+      crit: 1000
+    - metric: curr_items
+      description: items
+      warn: 30000000
+      crit: 40000000
+    - metric: delete_hits
+      description: deletes per second
+      warn: 500
+      crit: 1000
+    - metric: ep_bg_fetched
+      description: cache misses per second
+      warn: 100 
+      crit: 500
+    - metric: ep_dcp_2i_items_remaining
+      description: 2i indexer queue - items
+      warn: 5000
+      crit: 10000
+    - metric: ep_dcp_replica_backoff
+      description: DCP replica backoffs
+      warn: 1
+      crit: 2
+    - metric: ep_dcp_replica_items_remaining
+      description: internal replication queue - items
+      warn: 2500
+      crit: 5000
+    - metric: ep_dcp_replica_total_bytes
+      description: internal replication throughput - bytes
+      warn: 104857600
+      crit: 209715200
+    - metric: ep_dcp_xdcr_backoff
+      description: DCP XDCR backoffs
+      warn: 1
+      crit: 2
+    - metric: ep_dcp_xdcr_items_remaining
+      description: XDCR queue - items
+      warn: 5000
+      crit: 7500
+    - metric: ep_dcp_xdcr_total_bytes
+      description: XDCR throughput - bytes
+      warn: 52428800
+      crit: 104857600
+    - metric: ep_diskqueue_items
+      description: disk write queue - items
+      warn:
+      crit:
+    - metric: ep_flusher_todo
+      description: documents currently being written
+      warn: 5000
+      crit: 10000
+    - metric: ep_kv_size
+      description: KV size
+      warn:
+      crit:
+    - metric: ep_oom_errors
+      description: OOM errors
+      warn:
+      crit:
+    - metric: ep_queue_size
+      description: disk write queue - bytes
+      warn: 
+      crit:
+    - metric: ep_resident_items_rate
+      description: resident items rate
+      warn:
+      crit:
+    - metric: ep_tmp_oom_errors
+      description: temporary OOM errors
+      warn:
+      crit:
+    - metric: incr_hits
+      description: counter increment hits
+      warn:
+      crit:
+    - metric: mem_used
+      description: memory used
+      warn:
+      crit:
+    - metric: vb_active_queue_age
+      description: vbucket active queue age
+      warn:
+      crit:
+    - metric: vb_active_queue_size
+      description: vbucket active queue size
+      warn:
+      crit:
+    - metric: vb_active_resident_items_ratio
+      description: vbucket active resident items ratio
+      warn:
+      crit:
+    - metric: vb_avg_total_queue_age
+      description: vbucket average total queue age
+      warn:
+      crit:
+    - metric: vb_pending_queue_age
+      description: vbucket pending queue age
+      warn:
+      crit:
+    - metric: vb_pending_queue_size
+      description: pending queue size
+      warn:
+      crit:
+    - metric: vb_replica_queue_age
+      description: replica vbucket queue age
+      warn:
+      crit:
+    - metric: vb_replica_queue_size
+      description: replica vbucket queue size
+      warn:
+      crit:
+    - metric: vb_replica_resident_items_ratio
+      description: replica vbucket resident items ratio
+      warn:
+      crit:

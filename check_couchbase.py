@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # coding=utf-8
 
 """
@@ -7,12 +8,15 @@ See: http://docs.couchbase.com/admin/admin/REST/rest-bucket-intro.html
 #### Dependencies
 
  * json
+ * optparse
+ * pyyaml
  * urllib2
 
 """
 
 import base64
 import urllib2 
+from optparse import OptionParser
 from subprocess import Popen, PIPE
 from yaml import load
 
@@ -21,22 +25,28 @@ try:
 except ImportError:
   import simplejson as json
 
-def send(message,
-         nsca,
-         nagios_host,
-         host_name,
-         service_description,
-         service_status):
-    line = "%s\t%s\t%d\t%s\n" % (host_name, service_description, service_status, message)
+parser = OptionParser()
+parser.add_option('-c', dest='config_file', action='store')
+options, args = parser.parse_args()
+
+if(options.config_file is None):
+  print "Config file not specified.  Use -c CONFIG_FILE"
+  exit(1)
+
+yaml = file(options.config_file, 'r')
+config = load(yaml)
+
+def send(service, status, message):
+    line = "%s\t%s\t%d\t%s\n" % (config['couchbase_host'], service, status, message)
     print line
-"""
-    pipe = Popen((nsca, nagios_host), stdin=PIPE)
+
+    cmd = config['nsca_path'] + ' -H ' + config['nagios_host']
+    pipe = Popen(cmd, shell=True, stdin=PIPE)
     pipe.communicate(line)
     pipe.stdin.close()
     pipe.wait()
-"""
 
-def getStats(config, bucket=None):
+def getStats(bucket=None):
   host = config['couchbase_host']
   port = config['port']
   
@@ -45,7 +55,7 @@ def getStats(config, bucket=None):
   else:
     protocol = 'http'
   
-  url = protocol + '://' + host + ":" + str(port) + '/pools/default/buckets/' 
+  url = protocol + '://' + host + ':' + str(port) + '/pools/default/buckets/' 
 
   if bucket is not None:
     url = url + bucket + '/stats'
@@ -59,33 +69,36 @@ def getStats(config, bucket=None):
     f = urllib2.urlopen(request)
     return json.load(f)
   except urllib2.HTTPError, err:
-    log.error("CouchbaseCollector: %s, %s", url, err)
+    print "Failed to get stats for bucket: " + bucket
   
+def processMetrics(bucket, metrics):
+  data = getStats(bucket)
+  if not data:
+    return 
+
+  samples = data['op']['samples']
+
+  for m in metrics:
+    metric = m['metric']
+    avg_value = sum(samples[metric], 0.0) / len(samples[metric])
+
+    message = 'Bucket: ' + bucket + ', ' + metric + '= ' + str(avg_value)
+
+    if config['include_bucket_name'] is True:
+      service = 'CB ' + bucket + ' - ' + m['description']
+    else:
+      service = 'CB ' + bucket + ' - ' + m['description']
+
+    status = 0
+    send(service, status, message)
+
 def main():
-  yaml = file("check_couchbase.yaml", "r")
-  config = load(yaml)
-
-  buckets = config['buckets']
-
-  if buckets == 'all':
-    buckets = []
-    [buckets.append(bucket['name']) for bucket in getStats(config)] 
-
-  if isinstance(buckets, basestring):
-    buckets = [buckets]
-
-  for bucket in buckets:
-    data = getStats(config, bucket)
-    if not data:
-      continue
-
-    samples = data['op']['samples']
-    metrics = config['metrics']
-
-    for m in metrics:
-      metric = m["metric"]
-      avg_value = sum(samples[metric], 0.0) / len(samples[metric])
-      send("message", config["nsca_path"], config["nagios_host"], config["couchbase_host"], m["description"], 01) 
-
-if __name__ == "__main__":
+  for bucket in config['buckets']:
+    if bucket['name'] == '_all':
+      for b in getStats():
+        processMetrics(b['name'], bucket['metrics'])
+    else:
+      processMetrics(bucket['name'], bucket['metrics'])
+        
+if __name__ == '__main__':
     main()

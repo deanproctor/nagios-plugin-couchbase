@@ -27,6 +27,11 @@ from subprocess import Popen, PIPE
 from sys import stderr
 
 try:
+  from urllib import quote_plus
+except ImportError:
+  from urllib.parse import quote_plus
+
+try:
   import json 
 except ImportError:
   import simplejson as json
@@ -37,7 +42,7 @@ parser.add_argument('-c', '--config', dest='config_file', action='store', help='
 parser.add_argument('-v', dest='verbose', action='store_true', help='Enable debug logging to console')
 args = parser.parse_args()
 
-if not args.config_file:
+if not args.config_file: 
   parser.error('Config file is required.  Use -c CONFIG_FILE')
 
 config = yaml.load(open(args.config_file).read())
@@ -48,7 +53,7 @@ if args.verbose:
 logging.config.dictConfig(config['logging'])
 
 
-# Sends a passive check result to Nagios NSCA
+# Sends a passive check result to Nagios
 def send(host, service, status, message):
     line = "%s\t%s\t%d\t%s\n" % (host, service, status, message)
     log.debug(line)
@@ -65,9 +70,13 @@ def send(host, service, status, message):
 
 
 # Executes a Couchbase REST API request and returns the output
-def couchbase_request(uri):
+def couchbase_request(uri, service=None):
   host = config['couchbase_host']
-  port = config['couchbase_port']
+  
+  if service == 'query':
+    port = config['couchbase_query_port']
+  else:
+    port = config['couchbase_admin_port']
   
   if config['couchbase_ssl']:
     protocol = 'https'
@@ -100,88 +109,118 @@ def compare(inp, relate, cut):
 
 
 # Builds the nagios service description based on config
-def build_service_description(description, cluster_name, bucket=None):
-  # Format will be {prefix} {cluster_name} {bucket_name} - {service_description}
+def build_service_description(description, cluster_name, label):
+  # Format will be {prefix} {cluster_name} {label} - {service_description}
   service = config['prefix']
 
-  if config['service_include_cluster_name']:
-    if cluster_name:
-      service = service + ' ' + cluster_name
+  if config['service_include_cluster_name'] and cluster_name:
+    service = service + ' ' + cluster_name
 
-  if bucket is not None and config['service_include_bucket_name']:
-    service = service + ' ' + bucket
+  if config['service_include_label']:
+    service = service + ' ' + label
 
   service = service + ' - ' + description
 
   return service
 
 
-# Evalutes bucket stats and sends check results
-def process_bucket_stats(bucket, metrics, host, cluster_name):
+# Determines metric status based on value and thresholds
+def get_status(value, critical, warning, op):
+  if isinstance(critical, Number) and compare(value, op, critical):
+    return 2, 'CRITICAL'
+  elif isinstance(critical, basestring) and value in critical:
+    return 2, 'CRITICAL'
+  elif isinstance(warning, Number) and compare(value, op,  warning):
+    return 1, 'WARNING'
+  elif isinstance(warning, basestring) and value in warning:
+    return 1, 'WARNING'
+  else:
+    return 0, 'OK'
+
+
+# Evalutes data service stats and sends check results
+def process_data_stats(bucket, metrics, host, cluster_name):
   stats = couchbase_request('/pools/default/buckets/' + bucket + '/stats')
   samples = stats['op']['samples']
 
   for m in metrics:
-    m.setdefault('metric', None)
-    m.setdefault('description', None)
     m.setdefault('crit', None)
     m.setdefault('warn', None)
     m.setdefault('op', '>=')
     
-    metric      = m['metric']
-    description = m['description']
-    critical    = m['crit']
-    warning     = m['warn']
-    op          = m['op']
-
-    if metric is None:
-      log.error('Metric name not set for bucket: ' + bucket)
-      continue
-
-    if metric not in samples:
-      log.info('Metric not found for bucket: ' + bucket + ', metric: ' + metric)
-      continue
-
-    if description is None:
-      log.error('Service description is not set for bucket: ' + bucket + ', metric: ' + metric)
-      continue
-
-    if op not in ['>', '>=', '=', '<=', '<']:
-      log.error('Invalid operator: ' + op + ' for bucket: ' + bucket + ', metric: ' + metric)
+    if validate_metric(m, samples) is False:
       continue
 
     # Couchbase returns samples for the last 60 seconds.
     # Average them to smooth out values
-    value = sum(samples[metric], 0.0) / len(samples[metric])
+    value = sum(samples[m['metric']], 0) / len(samples[m['metric']])
 
-    # Evaluate the status and set the message
-    if isinstance(critical, Number) and compare(value, op, critical):
-      status = 2
-      status_text = 'CRITICAL'
-    elif isinstance(critical, basestring) and value in critical:
-      status = 2
-      status_text = 'CRITICAL'
-    elif isinstance(warning, Number) and compare(value, op,  warning):
-      status = 1
-      status_text = 'WARNING'
-    elif isinstance(warning, basestring) and value in warning:
-      status = 1
-      status_text = 'WARNING'
-    else:
-      status = 0
-      status_text = 'OK'
-
-    service = build_service_description(description, cluster_name, bucket)
-    message = status_text + ' - ' + metric + ': ' + str(value)
+    service = build_service_description(m['description'], cluster_name, bucket)
+    status, status_text = get_status(value, m['crit'], m['warn'], m['op'])
+    message = status_text + ' - ' + m['metric'] + ': ' + str(value)
 
     send(host, service, status, message)
 
 
+# Evaluates XDCR stats and sends check results
+def process_xdcr_stats(bucket, tasks, host, cluster_name):
+  if 'xdcr' not in config:
+    return
+
+  metrics = config['xdcr']['metrics']
+
+  for task in tasks:
+    if task['type'] == 'xdcr' and task['source'] == bucket:
+      if task['status'] == 'running':
+        for m in metrics:
+          m.setdefault('crit', None)
+          m.setdefault('warn', None)
+          m.setdefault('op', '>=')
+
+          uri = '/pools/default/buckets/' + bucket + '/stats/' + quote_plus('replications/' + task['id'] + '/' + m['metric'])
+          stats = couchbase_request(uri)
+          for node in stats['nodeStats']:
+            if host == node.split(':')[0]:
+              value = sum(stats['nodeStats'][node], 0) / len(stats['nodeStats'][node])
+              service = build_service_description(m['description'], cluster_name, 'xdcr')
+              status, status_text = get_status(value, m['crit'], m['warn'], m['op'])
+              message = status_text + ' - ' + m['metric'] + ': ' + str(value)
+
+              send(host, service, status, message)
+      else:
+        log.error('XDCR not running')
+
+# Evaluates query service stats and sends check results
+def process_query_stats(host, cluster_name):
+  if 'query' not in config:
+    return
+
+  metrics = config['query']['metrics']
+
+  samples = couchbase_request('/admin/vitals', 'query')
+
+  for m in metrics:
+    m.setdefault('crit', None)
+    m.setdefault('warn', None)
+    m.setdefault('op', '>=')
+
+    if validate_metric(m, samples) is False:
+      continue
+
+    value = samples[m['metric']]
+
+    service = build_service_description(m['description'], cluster_name, 'query service')
+    status, status_text = get_status(value, m['crit'], m['warn'], m['op'])
+    message = status_text + ' - ' + m['metric'] + ': ' + str(value)
+
+    send(host, service, status, message)
+   
 # Validates all config except metrics
 def validate_config():
   # set defaults
   config.setdefault('couchbase_host', 'localhost')
-  config.setdefault('couchbase_port', 18091)
+  config.setdefault('couchbase_admin_port', 18091)
+  config.setdefault('couchbase_query_port', 18093)
   config.setdefault('couchbase_ssl', True)
   config.setdefault('nsca_port', 5668)
   config.setdefault('nsca_path', '/sbin/send_nsca')
@@ -205,21 +244,55 @@ def validate_config():
       log.error(item + ' is not set')
       exit(1)
 
-  if 'data' in config:
-    for item in config['data']:
-      if 'bucket' not in item:
-        log.error('Bucket name is not set')
-        exit(1)
+  if 'data' not in config:
+    log.error('Data service metrics are required')
+    exit(1)
+    
+  for item in config['data']:
+    if 'bucket' not in item:
+      log.error('Bucket name is not set')
+      exit(1)
 
-      if 'metrics' not in item:
-        log.error('Metrics are not set for bucket: ' + item['bucket'])
-        exit(1)
+    if 'metrics' not in item:
+      log.error('Metrics are not set for bucket: ' + item['bucket'])
+      exit(1)
+
+  if 'query' in config and 'metrics' not in config['query']:
+      log.error('Metrics are not set for query service')
+      exit(1)
+
+  if 'xdcr' in config and 'metrics' not in config['xdcr']:
+      log.error('Metrics are not set for XDCR')
+      exit(1)
+
+
+# Validates metric config
+def validate_metric(metric, samples):
+  if 'metric' not in metric or metric['metric'] is None:
+    log.info('Skipped: metric name not set')
+    return False
+
+  name = metric['metric']
+
+  if name not in samples:
+    log.info('Skipped: metric does not exist: ' + name)
+    return False
+
+  if 'description' not in metric or metric['description'] is None:
+    log.info('Skipped: service description is not set for metric: ' + name)
+    return False
+
+  if metric['op'] not in ['>', '>=', '=', '<=', '<']:
+    log.info('Skipped: Invalid operator: ' + op + ' for metric: ' + name)
+    return False    
 
 
 def main():
   validate_config();
 
-  pools_default = couchbase_request('/pools/default/')
+  tasks = couchbase_request('/pools/default/tasks')
+
+  pools_default = couchbase_request('/pools/default')
   cluster_name = pools_default['clusterName']
   nodes = pools_default['nodes']
   for node in nodes:
@@ -231,13 +304,15 @@ def main():
     for item in config['data']:
       # _all is a special case where we process stats for all buckets
       if item['bucket'] == '_all':
-        for b in couchbase_request('/pools/default/buckets/'):
-          process_bucket_stats(b['name'], item['metrics'], host, cluster_name)
+        for bucket in couchbase_request('/pools/default/buckets?skipMap=true&basic_stats=true'):
+          process_data_stats(bucket['name'], item['metrics'], host, cluster_name)
+          process_xdcr_stats(bucket['name'], tasks, host, cluster_name)
       else:
-        process_bucket_stats(item['bucket'], item['metrics'], host, cluster_name)
+        process_data_stats(item['bucket'], item['metrics'], tasks, host, cluster_name)
+        process_xdcr_stats(item['bucket'], tasks, host, cluster_name)
         
   if 'n1ql' in services:
-    print 'n1ql'
+    process_query_stats(host, cluster_name)
 
 if __name__ == '__main__':
     main()

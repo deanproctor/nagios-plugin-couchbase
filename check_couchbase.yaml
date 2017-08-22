@@ -4,23 +4,31 @@
 #
 #
 
-# IP address or hostname of the local Couchbase node as configured in Couchbase
+# IP address or hostname of the Couchbase node to monitor
 couchbase_host: localhost
 
 # Couchbase admin port
-# 8091 (non-SSL)
-# 18091 (SSL)
-couchbase_port: 18091
+#  Defaults:
+#    8091 (non-SSL)
+#    18091 (SSL)
+couchbase_admin_port: 18091
+
+# Couchbase query port
+#  Defaults:
+#    8093 (non-SSL)
+#    18093 (SSL)
+couchbase_query_port: 18093
 
 # Admin username
-# Couchbase < 5.0: recommended to use the Read-Only Administrator
-# Couchbase 5.0+: user should only have the Data Monitoring role
+#  <  Couchbase 5: recommended to use the Read-Only Administrator
+#  >= Couchbase 5: admin user should only have the Data Monitoring role
 couchbase_user: readonly
 
 # Admin password
 couchbase_password: secret
 
 # Use SSL when talking to Couchbase
+#  Must also use the correct port above
 couchbase_ssl: True
 
 
@@ -51,7 +59,7 @@ nsca_path: /sbin/send_nsca
 #
 # These settings define how the Nagios service name should be constructed.
 # The service name format will be:
-#  {prefix} {cluster} {bucket} - {metric description}
+#  {prefix} {cluster} {label} - {metric description}
 
 # Nagios service prefix
 service_prefix: CB
@@ -59,8 +67,10 @@ service_prefix: CB
 # Include the cluster name in the service description
 service_include_cluster_name: True
 
-# Include the bucket name in the service description
-service_include_bucket_name: True
+# Include the label in the service description
+# Data service label is the bucket name
+# Other services use the service name, e.g. "query service"
+service_include_label: True
 
 
 #
@@ -145,20 +155,12 @@ data:
       description: items in views indexer queue 
       warn: 5000
       crit: 10000
-    - metric: ep_dcp_xdcr_items_remaining
-      description: items in XDCR queue 
-      warn: 5000
-      crit: 7500
     - metric: ep_dcp_replica_backoff
       description: internal replication backoffs
       crit: 1
     - metric: ep_dcp_xdcr_backoff
       description: XDCR backoffs
       crit: 1
-    - metric: ep_dcp_xdcr_total_bytes
-      description: XDCR throughput - bytes
-      warn: 52428800
-      crit: 104857600
     - metric: vb_avg_total_queue_age
       description: disk write queue average age
       warn: 5
@@ -189,37 +191,52 @@ data:
       op: "<"
 
 # Query service
+# All metric names documented here (under Vitals):
+# https://developer.couchbase.com/documentation/server/current/tools/query-monitoring.html
 query:
   metrics:
-    - metric: request.active.count
-      description: active N1QL requests
-      warn: 750 
-      crit: 1500
-    - metric: request_timer.75%
-      description:
+    - metric: request_time.80percentile
+      description: 80th percentile query response time
       warn: 0.1 
       crit: 0.2 
-    - metric: request_timer.95%
-      description: 
+    - metric: request_time.95percentile
+      description: 95th percentile query response time
       warn: 0.2 
       crit: 0.3
-    - metric: request_timer.99%
-      description: 
+    - metric: request_time.99percentile
+      description: 99th percentile query response time 
       warn: 0.4 
       crit: 0.5 
-    - metric: request_timer.1m.rate
-      description: 
-      warn: 0.25 
-      crit: 0.3 
-    - metric: request_timer.5m.rate
-      description: 
-      warn: 0.15 
-      crit: 0.2 
-    - metric: request_timer.15m.rate
-      description: 
-      warn: 0.1 
-      crit: 0.15 
+    - metric: request.active.count
+      description: active N1QL requests
+      warn: 1000 
+      crit: 1500
+    - metric: request.per.sec.1min
+      description: query throughput 1 minute 
+      warn: 900 
+      crit: 950
+    - metric: request.per.sec.5min
+      description: query throughput 5 minute 
+      warn: 800 
+      crit: 850
+    - metric: request.per.sec.15min
+      description: query throughput 15 minute 
+      warn: 700
+      crit: 750
 
+# XDCR
+# All metric names documented here:
+# https://developer.couchbase.com/documentation/server/current/rest-api/rest-xdcr-statistics.html
+xdcr:
+  metrics:
+    - metric: changes_left
+      description: documents pending replication
+      warn: 2500
+      crit: 5000 
+    - metric: bandwidth_usage
+      description: bandwidth used for replication 
+      warn: 50000000
+      crit: 100000000
 
 #
 #

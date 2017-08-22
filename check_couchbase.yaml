@@ -3,7 +3,7 @@
 #
 
 # IP address or hostname of the local Couchbase node as configured in Couchbase
-couchbase_host: 192.168.61.102
+couchbase_host: localhost
 
 # Couchbase admin port
 # 8091 (non-SSL)

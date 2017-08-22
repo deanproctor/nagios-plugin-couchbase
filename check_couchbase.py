@@ -7,7 +7,7 @@ See: http://docs.couchbase.com/admin/admin/REST/rest-bucket-intro.html
 
 #### Dependencies
 
- * pyyaml
+ * PyYAML
  * nsca-ng
 
 """
@@ -47,8 +47,8 @@ else:
 
 
 # Sends a passive check result to Nagios NSCA
-def send(service, status, message):
-    line = "%s\t%s\t%d\t%s\n" % (config['couchbase_host'], service, status, message)
+def send(host, service, status, message):
+    line = "%s\t%s\t%d\t%s\n" % (host, service, status, message)
     log.debug(line)
 
     cmd = config['nsca_path'] + ' -H ' + str(config['nagios_host']) + ' -p ' + str(config['nsca_port'])
@@ -59,7 +59,7 @@ def send(service, status, message):
 
 
 # Executes a Couchbase REST API request and returns the output
-def couchbaseRequest(uri):
+def couchbase_request(uri):
   host = config['couchbase_host']
   port = config['couchbase_port']
   
@@ -95,7 +95,7 @@ def compare(inp, relate, cut):
 
 # Evalutes bucket stats and sends check results
 def processStats(bucket, metrics):
-  stats = couchbaseRequest('/pools/default/buckets/' + bucket + '/stats')
+  stats = couchbase_request('/pools/default/buckets/' + bucket + '/stats')
   if not stats:
     log.error('Failed to retrieve stats for bucket: ' + bucket)
     return
@@ -135,12 +135,14 @@ def processStats(bucket, metrics):
     # Average them to smooth out values
     value = sum(samples[metric], 0.0) / len(samples[metric])
 
+    pools_default = couchbase_request('/pools/default/')
+
     # Build the Nagios service name
     # Format will be {prefix} {cluster_name} {bucket_name} - {service_description}
     service = config['prefix']
 
     if config['service_include_cluster_name']:
-      cluster_name = couchbaseRequest('/pools/default/')['clusterName']
+      cluster_name = pools_default['clusterName']
       if cluster_name:
         service = service + ' ' + cluster_name
 
@@ -168,12 +170,17 @@ def processStats(bucket, metrics):
 
     message = status_text + ' - ' + metric + ': ' + str(value)
 
-    send(service, status, message)
+    nodes = pools_default['nodes']
+    for node in nodes:
+      if node['thisNode'] is True:
+        host, trash = node['hostname'].split(':')
+
+    send(host, service, status, message)
 
 
 # Validates all config except metrics
 def validate_config():
-  config.setdefault('couchbase_server', 'localhost')
+  config.setdefault('couchbase_host', 'localhost')
   config.setdefault('couchbase_port', 18091)
   config.setdefault('couchbase_user', None)
   config.setdefault('couchbase_password', None)
@@ -225,7 +232,7 @@ def main():
   for bucket in config['buckets']:
     # _all is a special case where we processStats for all buckets
     if bucket['name'] == '_all':
-      for b in couchbaseRequest('/pools/default/buckets/'):
+      for b in couchbase_request('/pools/default/buckets/'):
         processStats(b['name'], bucket['metrics'])
     else:
       processStats(bucket['name'], bucket['metrics'])

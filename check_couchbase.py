@@ -55,18 +55,19 @@ logging.config.dictConfig(config['logging'])
 
 # Sends a passive check result to Nagios
 def send(host, service, status, message):
-    line = "%s\t%s\t%d\t%s\n" % (host, service, status, message)
-    log.debug(line)
+  line = "%s\t%s\t%d\t%s\n" % (host, service, status, message)
+  log.debug(line)
 
-    if not os.path.exists(config['nsca_path']):
-      log.error('path to send_nsca is invalid: ' + config['nsca_path'])
-      exit(1)
+  if not os.path.exists(config['nsca_path']):
+    log.error('path to send_nsca is invalid: ' + config['nsca_path'])
+    exit(1)
 
-    cmd = config['nsca_path'] + ' -H ' + str(config['nagios_host']) + ' -p ' + str(config['nsca_port'])
-    pipe = Popen(cmd, shell=True, stdin=PIPE)
-    pipe.communicate(line)
-    pipe.stdin.close()
-    pipe.wait()
+  cmd = config['nsca_path'] + ' -H ' + str(config['nagios_host']) + ' -p ' + str(config['nsca_port'])
+
+  pipe = Popen(cmd, shell=True, stdin=PIPE)
+  pipe.communicate(line)
+  pipe.stdin.close()
+  pipe.wait()
 
 
 # Executes a Couchbase REST API request and returns the output
@@ -190,13 +191,13 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
       else:
         log.error('XDCR not running')
 
+
 # Evaluates query service stats and sends check results
 def process_query_stats(host, cluster_name):
   if 'query' not in config:
     return
 
   metrics = config['query']['metrics']
-
   samples = couchbase_request('/admin/vitals', 'query')
 
   for m in metrics:
@@ -313,6 +314,7 @@ def main():
         
   if 'n1ql' in services:
     process_query_stats(host, cluster_name)
+
 
 if __name__ == '__main__':
     main()

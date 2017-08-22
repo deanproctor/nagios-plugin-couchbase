@@ -58,6 +58,9 @@ def send(host, service, status, message):
   line = "%s\t%s\t%d\t%s\n" % (host, service, status, message)
   log.debug(line)
 
+  if config['send_metrics'] == 'false':
+    return
+
   if not os.path.exists(config['nsca_path']):
     log.error('path to send_nsca is invalid: ' + config['nsca_path'])
     exit(1)
@@ -232,12 +235,15 @@ def validate_config():
   # For docker environments
   env_couchbase_host = os.getenv('COUCHBASE_HOST', None)
   env_nagios_host    = os.getenv('NAGIOS_HOST', None)
+  env_send_metrics   = os.getenv('SEND_METRICS', True)
 
   if env_couchbase_host:
     config['couchbase_host'] = env_couchbase_host
 
   if env_nagios_host:
     config['nagios_host'] = env_nagios_host
+
+  config['send_metrics'] = env_send_metrics
 
   # Unrecoverable errors
   for item in ['couchbase_user', 'couchbase_password', 'nagios_host', 'nsca_password']:

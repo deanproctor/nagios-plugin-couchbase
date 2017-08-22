@@ -8,28 +8,29 @@ couchbase_host: 192.168.61.102
 # Couchbase admin port
 # 8091 (non-SSL)
 # 18091 (SSL)
-port: 18091
+couchbase_port: 18091
 
 # Admin username
-# It is recommended to use...
-# Couchbase < 5.0:  Read-Only Administrator
-# Couchbase 5.0+: Data Monitoring role
-user: readonly
+# Couchbase < 5.0: recommended to use the Read-Only Administrator
+# Couchbase 5.0+: user should only have the Data Monitoring role
+couchbase_user: readonly
 
 # Admin password
-password: secret
+couchbase_password: secret
 
 # Use SSL when talking to Couchbase
-ssl: True
+couchbase_ssl: True
 
 
 #
 # Nagios Config
 #
-#
 
 # IP address or hostname of the Nagios server
 nagios_host: 10.0.2.2
+
+# NSCA service port
+nsca_port: 5668
 
 # NSCA password as set on the Nagios server
 # Typicaly found in nsca.cfg or nsca-ng.cfg
@@ -45,20 +46,29 @@ nsca_path: /sbin/send_nsca
 
 # Nagios service prefix
 # Service name format will be: {prefix} {cluster} {bucket} - {metric description}
-prefix: CB
+service_prefix: CB
 
 # Include the cluster name in the service description
-include_cluster_name: True
+service_include_cluster_name: True
 
 # Include the bucket name in the service description
-include_bucket_name: True
+service_include_bucket_name: True
 
 # Metrics by bucket
-# Special name _all will evaluate the configured metrics and thresholds for all buckets
-# Name your buckets individually to customize the metrics and thresholds by bucket
+# name: the bucket name, special name _all will evaluate the configured metrics and thresholds for all buckets
+# metric: the Couchbase REST API metric to check
+# warn: the warning threshold
+# crit: the critical threshold
+# op: the operator to use when comparing the current value against the thresholds, e.g. current_value > threshold
+  # options: ">", ">=", "=", "<=", "<"
+  # default: ">="
 buckets: 
   - name: _all
     metrics:
+    - metric: status
+      description: node health
+      crit: healthy
+      op: "!="
     - metric: cmd_get
       description: gets per second
       warn: 5000
@@ -67,22 +77,6 @@ buckets:
       description: sets per second 
       warn: 5000 
       crit: 10000 
-    - metric: couch_docs_fragmentation
-      description: document data fragmentation 
-      warn: 35 
-      crit: 50
-    - metric: couch_views_fragmentation
-      description: views fragmentation
-      warn: 35
-      crit: 50
-    - metric: curr_connections
-      description: connections
-      warn: 500
-      crit: 1000
-    - metric: curr_items
-      description: items
-      warn: 30000000
-      crit: 40000000
     - metric: delete_hits
       description: deletes per second
       warn: 500
@@ -91,103 +85,97 @@ buckets:
       description: cache misses per second
       warn: 100 
       crit: 500
-    - metric: ep_dcp_2i_items_remaining
-      description: 2i indexer queue - items
-      warn: 5000
-      crit: 10000
-    - metric: ep_dcp_replica_backoff
-      description: DCP replica backoffs
-      warn: 1
-      crit: 2
+    - metric: curr_items
+      description: item count
+      warn: 30000000
+      crit: 40000000
+    - metric: couch_docs_fragmentation
+      description: percent data fragmentation 
+      warn: 35 
+      crit: 50
+    - metric: couch_views_fragmentation
+      description: percent views fragmentation
+      warn: 35
+      crit: 50
+    - metric: curr_connections
+      description: client connections
+      warn: 500
+      crit: 1000
+    - metric: ep_diskqueue_items
+      description: items in disk write queue 
+      warn: 10000
+      crit: 50000
     - metric: ep_dcp_replica_items_remaining
-      description: internal replication queue - items
+      description: items in internal replication queue
       warn: 2500
       crit: 5000
-    - metric: ep_dcp_replica_total_bytes
-      description: internal replication throughput - bytes
-      warn: 104857600
-      crit: 209715200
-    - metric: ep_dcp_xdcr_backoff
-      description: DCP XDCR backoffs
-      warn: 1
-      crit: 2
+    - metric: ep_dcp_2i_items_remaining
+      description: items in 2i indexer queue
+      warn: 5000
+      crit: 10000
+    - metric: ep_dcp_views_items_remaining
+      description: items in views indexer queue 
+      warn: 5000
+      crit: 10000
     - metric: ep_dcp_xdcr_items_remaining
-      description: XDCR queue - items
+      description: items in XDCR queue 
       warn: 5000
       crit: 7500
+    - metric: ep_dcp_replica_backoff
+      description: internal replication backoffs
+      crit: 1
+    - metric: ep_dcp_xdcr_backoff
+      description: XDCR backoffs
+      crit: 1
     - metric: ep_dcp_xdcr_total_bytes
       description: XDCR throughput - bytes
       warn: 52428800
       crit: 104857600
-    - metric: ep_diskqueue_items
-      description: disk write queue - items
-      warn:
-      crit:
-    - metric: ep_flusher_todo
-      description: documents currently being written
-      warn: 5000
-      crit: 10000
+    - metric: vb_avg_total_queue_age
+      description: disk write queue average age
+      warn: 5
+      crit: 10
+    - metric: ep_oom_errors
+      description: out of memory errors
+      crit: 1
+    - metric: ep_tmp_oom_errors
+      description: temporary out of memory errors
+      crit: 1
     - metric: ep_kv_size
       description: KV size
-      warn:
-      crit:
-    - metric: ep_oom_errors
-      description: OOM errors
-      warn:
-      crit:
-    - metric: ep_queue_size
-      description: disk write queue - bytes
-      warn: 
-      crit:
-    - metric: ep_resident_items_rate
-      description: resident items rate
-      warn:
-      crit:
-    - metric: ep_tmp_oom_errors
-      description: temporary OOM errors
-      warn:
-      crit:
-    - metric: incr_hits
-      description: counter increment hits
-      warn:
-      crit:
-    - metric: mem_used
-      description: memory used
-      warn:
-      crit:
-    - metric: vb_active_queue_age
-      description: vbucket active queue age
-      warn:
-      crit:
-    - metric: vb_active_queue_size
-      description: vbucket active queue size
-      warn:
-      crit:
+      warn: 50000 
+      crit: 100000
     - metric: vb_active_resident_items_ratio
-      description: vbucket active resident items ratio
-      warn:
-      crit:
-    - metric: vb_avg_total_queue_age
-      description: vbucket average total queue age
-      warn:
-      crit:
-    - metric: vb_pending_queue_age
-      description: vbucket pending queue age
-      warn:
-      crit:
-    - metric: vb_pending_queue_size
-      description: pending queue size
-      warn:
-      crit:
-    - metric: vb_replica_queue_age
-      description: replica vbucket queue age
-      warn:
-      crit:
-    - metric: vb_replica_queue_size
-      description: replica vbucket queue size
-      warn:
-      crit:
+      description: percent active items in memory
+      warn: 50
+      crit: 15
+      op: "<"
     - metric: vb_replica_resident_items_ratio
-      description: replica vbucket resident items ratio
-      warn:
-      crit:
+      description: percent replica items in memory
+      warn: 50
+      crit: 15
+      op: "<"
+    - metric: vb_active_num
+      description: number of active vbuckets
+      crit: 1024
+      op: "<"
+
+
+#
+# Python Logging
+#
+
+logging:
+  version: 1
+  formatters:
+    simple:
+      format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: ERROR
+      formatter: simple
+      stream: ext://sys.stdout
+  root:
+    level: DEBUG
+    handlers: [console]

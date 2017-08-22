@@ -125,7 +125,7 @@ def build_service_description(description, cluster_name, label):
 
 
 # Determines metric status based on value and thresholds
-def get_status(value, critical, warning, op):
+def eval_status(value, critical, warning, op):
   if isinstance(critical, Number) and compare(value, op, critical):
     return 2, 'CRITICAL'
   elif isinstance(critical, basestring) and value in critical:
@@ -156,7 +156,7 @@ def process_data_stats(bucket, metrics, host, cluster_name):
     value = sum(samples[m['metric']], 0) / len(samples[m['metric']])
 
     service = build_service_description(m['description'], cluster_name, bucket)
-    status, status_text = get_status(value, m['crit'], m['warn'], m['op'])
+    status, status_text = eval_status(value, m['crit'], m['warn'], m['op'])
     message = status_text + ' - ' + m['metric'] + ': ' + str(value)
 
     send(host, service, status, message)
@@ -183,7 +183,7 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
             if host == node.split(':')[0]:
               value = sum(stats['nodeStats'][node], 0) / len(stats['nodeStats'][node])
               service = build_service_description(m['description'], cluster_name, 'xdcr')
-              status, status_text = get_status(value, m['crit'], m['warn'], m['op'])
+              status, status_text = eval_status(value, m['crit'], m['warn'], m['op'])
               message = status_text + ' - ' + m['metric'] + ': ' + str(value)
 
               send(host, service, status, message)
@@ -210,7 +210,7 @@ def process_query_stats(host, cluster_name):
     value = samples[m['metric']]
 
     service = build_service_description(m['description'], cluster_name, 'query service')
-    status, status_text = get_status(value, m['crit'], m['warn'], m['op'])
+    status, status_text = eval_status(value, m['crit'], m['warn'], m['op'])
     message = status_text + ' - ' + m['metric'] + ': ' + str(value)
 
     send(host, service, status, message)

@@ -69,7 +69,7 @@ service_include_cluster_name: True
 
 # Include the label in the service description
 # Data service label is the bucket name
-# Other services use the service name, e.g. "query service"
+# Other services use the service name, e.g. "query" or "xdcr"
 service_include_label: True
 
 
@@ -78,7 +78,7 @@ service_include_label: True
 # METRICS AND THRESHOLDS
 #
 #
-#  Metrics are monitored by service: data, query, index, fts 
+#  Metrics are monitored by service: data, query, index, fts, xdcr 
 #
 #  Metrics have 5 possible values:
 #    Required:

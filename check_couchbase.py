@@ -213,7 +213,7 @@ def process_query_stats(host, cluster_name):
 
     value = samples[m['metric']]
 
-    service = build_service_description(m['description'], cluster_name, 'query service')
+    service = build_service_description(m['description'], cluster_name, 'query')
     status, status_text = eval_status(value, m['crit'], m['warn'], m['op'])
     message = status_text + ' - ' + m['metric'] + ': ' + str(value)
 

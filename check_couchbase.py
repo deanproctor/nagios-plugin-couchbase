@@ -95,12 +95,8 @@ def compare(inp, relate, cut):
 
 
 # Evalutes bucket stats and sends check results
-def processStats(bucket, metrics):
+def processStats(bucket, metrics, host, cluster_name):
   stats = couchbase_request('/pools/default/buckets/' + bucket + '/stats')
-  if not stats:
-    log.error('Failed to retrieve stats for bucket: ' + bucket)
-    return
-
   samples = stats['op']['samples']
 
   for m in metrics:
@@ -136,14 +132,12 @@ def processStats(bucket, metrics):
     # Average them to smooth out values
     value = sum(samples[metric], 0.0) / len(samples[metric])
 
-    pools_default = couchbase_request('/pools/default/')
 
     # Build the Nagios service name
     # Format will be {prefix} {cluster_name} {bucket_name} - {service_description}
     service = config['prefix']
 
     if config['service_include_cluster_name']:
-      cluster_name = pools_default['clusterName']
       if cluster_name:
         service = service + ' ' + cluster_name
 
@@ -171,83 +165,65 @@ def processStats(bucket, metrics):
 
     message = status_text + ' - ' + metric + ': ' + str(value)
 
-    nodes = pools_default['nodes']
-    for node in nodes:
-      if node['thisNode'] is True:
-        host, trash = node['hostname'].split(':')
-
     send(host, service, status, message)
 
 
 # Validates all config except metrics
 def validate_config():
+  # set defaults
   config.setdefault('couchbase_host', 'localhost')
   config.setdefault('couchbase_port', 18091)
-  config.setdefault('couchbase_user', None)
-  config.setdefault('couchbase_password', None)
   config.setdefault('couchbase_ssl', True)
-  config.setdefault('nagios_host', None)
   config.setdefault('nsca_port', 5668)
-  config.setdefault('nsca_password', None)
   config.setdefault('nsca_path', '/sbin/send_nsca')
   config.setdefault('prefix', 'CB')
   config.setdefault('service_include_cluster_name', True)
   config.setdefault('service_include_bucket_name', True)
-  config.setdefault('buckets', None)
 
   # For docker environments
   env_couchbase_host = getenv('COUCHBASE_HOST', None)
   env_nagios_host    = getenv('NAGIOS_HOST', None)
 
-  if env_couchbase_host is not None:
+  if env_couchbase_host:
     config['couchbase_host'] = env_couchbase_host
 
-  if env_nagios_host is not None:
+  if env_nagios_host:
     config['nagios_host'] = env_nagios_host
 
-  # Unrecoverable conditions
-  if config['couchbase_user'] is None:
-    log.error('couchbase_user is not set')
-    exit(1)
-
-  if config['couchbase_password'] is None:
-    log.error('couchbase_password is not set')
-    exit(1)
-
-  if config['nagios_host'] is None:
-    log.error('nagios_host is not set')
-    exit(1)
-
-  if config['nsca_password'] is None:
-    log.error('nsca_password is not set')
-    exit(1)
-
-  if config['buckets'] is None:
-    log.error('buckets is not set')
-    exit(1)
-
-  for bucket in config['buckets']:
-    bucket.setdefault('name', None)
-    bucket.setdefault('metrics', None)
-
-    if bucket['name'] is None:
-      log.error('Bucket name is not set')
+  # Unrecoverable errors
+  for item in ['couchbase_user', 'couchbase_password', 'nagios_host', 'nsca_password']:
+    if item not in config:
+      log.error(item + ' is not set')
       exit(1)
 
-    if bucket['metrics'] is None:
-      log.error('Metrics are not set for bucket: ' + bucket['name'])
-      exit(1)
+  if 'buckets' in config:
+    for bucket in config['buckets']:
+      if 'name' not in bucket:
+        log.error('Bucket name is not set')
+        exit(1)
+
+      if 'metrics' not in bucket:
+        log.error('Metrics are not set for bucket: ' + bucket['name'])
+        exit(1)
 
 
 def main():
   validate_config();
+
+  pools_default = couchbase_request('/pools/default/')
+  cluster_name = pools_default['clusterName']
+  nodes = pools_default['nodes']
+  for node in nodes:
+    if 'thisNode' in node:
+      host, trash = node['hostname'].split(':')
+
   for bucket in config['buckets']:
     # _all is a special case where we processStats for all buckets
     if bucket['name'] == '_all':
       for b in couchbase_request('/pools/default/buckets/'):
-        processStats(b['name'], bucket['metrics'])
+        processStats(b['name'], bucket['metrics'], host, cluster_name)
     else:
-      processStats(bucket['name'], bucket['metrics'])
+      processStats(bucket['name'], bucket['metrics'], host, cluster_name)
         
 
 if __name__ == '__main__':

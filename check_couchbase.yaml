@@ -1,7 +1,6 @@
 #
 # Couchbase Config
 #
-
 # IP address or hostname of the local Couchbase node as configured in Couchbase
 couchbase_host: localhost
 
@@ -25,7 +24,6 @@ couchbase_ssl: True
 #
 # Nagios Config
 #
-
 # IP address or hostname of the Nagios server
 nagios_host: 10.0.2.2
 
@@ -43,7 +41,6 @@ nsca_path: /sbin/send_nsca
 #
 # Monitoring Options
 #
-
 # Nagios service prefix
 # Service name format will be: {prefix} {cluster} {bucket} - {metric description}
 service_prefix: CB
@@ -160,11 +157,44 @@ buckets:
       crit: 1024
       op: "<"
 
+query:
+  metrics:
+    - metric: request.active.count
+      description: active N1QL requests
+      warn: 750 
+      crit: 1500
+    - metric: request_rate.mean.rate
+      description:
+      warn: 1000
+      crit: 2000
+    - metric: request_timer.75%
+      description:
+      warn: 0.1 
+      crit: 0.2 
+    - metric: request_timer.95%
+      description: 
+      warn: 0.2 
+      crit: 0.3
+    - metric: request_timer.99%
+      description: 
+      warn: 0.4 
+      crit: 0.5 
+    - metric: request_timer.1m.rate
+      description: 
+      warn: 0.25 
+      crit: 0.3 
+    - metric: request_timer.5m.rate
+      description: 
+      warn: 0.15 
+      crit: 0.2 
+    - metric: request_timer.15m.rate
+      description: 
+      warn: 0.1 
+      crit: 0.15 
 
 #
 # Python Logging
 #
-
 logging:
   version: 1
   formatters:

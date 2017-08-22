@@ -21,6 +21,7 @@ import yaml
 from argparse import ArgumentParser
 from base64 import b64encode
 from numbers import Number
+from os import getenv
 from subprocess import Popen, PIPE
 from sys import stderr
 
@@ -79,7 +80,7 @@ def couchbase_request(uri):
     f = urllib2.urlopen(request)
     return json.load(f)
   except urllib2.HTTPError:
-    log.error('Failed to complete request to Couchbase: ' + uri)
+    log.error('Failed to complete request to Couchbase: ' + uri + ', verify couchbase_user and couchbase_password settings')
 
 
 # For dynamic comparisons
@@ -194,6 +195,17 @@ def validate_config():
   config.setdefault('service_include_bucket_name', True)
   config.setdefault('buckets', None)
 
+  # For docker environments
+  env_couchbase_host = getenv('COUCHBASE_HOST', None)
+  env_nagios_host    = getenv('NAGIOS_HOST', None)
+
+  if env_couchbase_host is not None:
+    config['couchbase_host'] = env_couchbase_host
+
+  if env_nagios_host is not None:
+    config['nagios_host'] = env_nagios_host
+
+  # Unrecoverable conditions
   if config['couchbase_user'] is None:
     log.error('couchbase_user is not set')
     exit(1)

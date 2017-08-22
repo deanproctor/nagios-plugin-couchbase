@@ -12,16 +12,17 @@ See: http://docs.couchbase.com/admin/admin/REST/rest-bucket-intro.html
 
 """
 
-import logging as log 
+import logging as log
 import logging.config
 import operator
+import os
+import ssl
 import urllib2
 import yaml
 
 from argparse import ArgumentParser
 from base64 import b64encode
 from numbers import Number
-from os import getenv
 from subprocess import Popen, PIPE
 from sys import stderr
 
@@ -42,15 +43,19 @@ if not args.config_file:
 config = yaml.load(open(args.config_file).read())
 
 if args.verbose:
-  log.basicConfig(stream=stderr, level=log.DEBUG)
-else: 
-  logging.config.dictConfig(config['logging'])
+  config['logging']['handlers']['console']['level'] = 'DEBUG'
+
+logging.config.dictConfig(config['logging'])
 
 
 # Sends a passive check result to Nagios NSCA
 def send(host, service, status, message):
     line = "%s\t%s\t%d\t%s\n" % (host, service, status, message)
     log.debug(line)
+
+    if not os.path.exists(config['nsca_path']):
+      log.error('path to send_nsca is invalid: ' + config['nsca_path'])
+      exit(1)
 
     cmd = config['nsca_path'] + ' -H ' + str(config['nagios_host']) + ' -p ' + str(config['nsca_port'])
     pipe = Popen(cmd, shell=True, stdin=PIPE)
@@ -77,7 +82,7 @@ def couchbase_request(uri):
   request.add_header('Authorization', "Basic %s" % auth_string)
 
   try:
-    f = urllib2.urlopen(request)
+    f = urllib2.urlopen(request, context=ssl.SSLContext(ssl.PROTOCOL_TLSv1))
     return json.load(f)
   except urllib2.HTTPError:
     log.error('Failed to complete request to Couchbase: ' + uri + ', verify couchbase_user and couchbase_password settings')
@@ -94,8 +99,25 @@ def compare(inp, relate, cut):
   return ops[relate](inp, cut)
 
 
+# Builds the nagios service description based on config
+def build_service_description(description, cluster_name, bucket=None):
+  # Format will be {prefix} {cluster_name} {bucket_name} - {service_description}
+  service = config['prefix']
+
+  if config['service_include_cluster_name']:
+    if cluster_name:
+      service = service + ' ' + cluster_name
+
+  if bucket is not None and config['service_include_bucket_name']:
+    service = service + ' ' + bucket
+
+  service = service + ' - ' + description
+
+  return service
+
+
 # Evalutes bucket stats and sends check results
-def processStats(bucket, metrics, host, cluster_name):
+def process_bucket_stats(bucket, metrics, host, cluster_name):
   stats = couchbase_request('/pools/default/buckets/' + bucket + '/stats')
   samples = stats['op']['samples']
 
@@ -132,20 +154,6 @@ def processStats(bucket, metrics, host, cluster_name):
     # Average them to smooth out values
     value = sum(samples[metric], 0.0) / len(samples[metric])
 
-
-    # Build the Nagios service name
-    # Format will be {prefix} {cluster_name} {bucket_name} - {service_description}
-    service = config['prefix']
-
-    if config['service_include_cluster_name']:
-      if cluster_name:
-        service = service + ' ' + cluster_name
-
-    if config['service_include_bucket_name']:
-      service = service + ' ' + bucket
-
-    service = service + ' - ' + description
-
     # Evaluate the status and set the message
     if isinstance(critical, Number) and compare(value, op, critical):
       status = 2
@@ -163,6 +171,7 @@ def processStats(bucket, metrics, host, cluster_name):
       status = 0
       status_text = 'OK'
 
+    service = build_service_description(description, cluster_name, bucket)
     message = status_text + ' - ' + metric + ': ' + str(value)
 
     send(host, service, status, message)
@@ -181,8 +190,8 @@ def validate_config():
   config.setdefault('service_include_bucket_name', True)
 
   # For docker environments
-  env_couchbase_host = getenv('COUCHBASE_HOST', None)
-  env_nagios_host    = getenv('NAGIOS_HOST', None)
+  env_couchbase_host = os.getenv('COUCHBASE_HOST', None)
+  env_nagios_host    = os.getenv('NAGIOS_HOST', None)
 
   if env_couchbase_host:
     config['couchbase_host'] = env_couchbase_host
@@ -215,16 +224,20 @@ def main():
   nodes = pools_default['nodes']
   for node in nodes:
     if 'thisNode' in node:
-      host, trash = node['hostname'].split(':')
+      host = node['hostname'].split(':')[0]
+      services = node['services']
 
-  for bucket in config['buckets']:
-    # _all is a special case where we processStats for all buckets
-    if bucket['name'] == '_all':
-      for b in couchbase_request('/pools/default/buckets/'):
-        processStats(b['name'], bucket['metrics'], host, cluster_name)
-    else:
-      processStats(bucket['name'], bucket['metrics'], host, cluster_name)
+  if 'kv' in services:
+    for bucket in config['buckets']:
+      # _all is a special case where we process stats for all buckets
+      if bucket['name'] == '_all':
+        for b in couchbase_request('/pools/default/buckets/'):
+          process_bucket_stats(b['name'], bucket['metrics'], host, cluster_name)
+      else:
+        process_bucket_stats(bucket['name'], bucket['metrics'], host, cluster_name)
         
+  if 'n1ql' in services:
+    print 'n1ql'
 
 if __name__ == '__main__':
     main()

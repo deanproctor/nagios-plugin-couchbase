@@ -32,13 +32,10 @@ from sys import exit, stderr
 
 # Basic setup
 parser = ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
-parser.add_argument("-c", "--config", dest="config_file", action="store", help="Path to the check_couchbase YAML file")
-parser.add_argument("-n", dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
-parser.add_argument("-v", dest="verbose", action="store_true", help="Enable debug logging to console")
+parser.add_argument("-c", "--config", required=True, dest="config_file", action="store", help="Path to the check_couchbase YAML file")
+parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
+parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="Enable debug logging to console")
 args = parser.parse_args()
-
-if not args.config_file:
-    parser.error("Config file is required. Use -c CONFIG_FILE")
 
 config = yaml.load(open(args.config_file).read())
 
@@ -66,7 +63,7 @@ def send(host, service, status, message):
 
     if not os.path.exists(config["nsca_path"]):
         log.error("Path to send_nsca is invalid: {0}".format(config["nsca_path"]))
-        exit(1)
+        exit(2)
 
     cmd = "{0} -H {1} -p {2}".format(config["nsca_path"], str(config["nagios_host"]), str(config["nsca_port"]))
 
@@ -99,7 +96,7 @@ def couchbase_request(uri, service=None):
 
         if("permissions" in response):
             log.error("{0}: {1}".format(response["message"], response["permissions"]))
-            exit(1)
+            exit(2)
 
         return response
     except:
@@ -281,32 +278,32 @@ def validate_config():
     for item in ["couchbase_user", "couchbase_password", "nagios_host", "nsca_password"]:
         if item not in config:
             log.error("{0} is not set".format(item))
-            exit(1)
+            exit(2)
 
     if "data" not in config:
         log.error("Data service metrics are required")
-        exit(1)
+        exit(2)
 
     if "node" not in config or "metrics" not in config["node"]:
         log.error("Node metrics are required")
-        exit(1)
+        exit(2)
 
     for item in config["data"]:
         if "bucket" not in item:
             log.error("Bucket name is not set")
-            exit(1)
+            exit(2)
 
         if "metrics" not in item:
             log.error("Metrics are not set for bucket: {0}".format(item["bucket"]))
-            exit(1)
+            exit(2)
 
     if "query" in config and "metrics" not in config["query"]:
             log.error("Metrics are not set for query service")
-            exit(1)
+            exit(2)
 
     if "xdcr" in config and "metrics" not in config["xdcr"]:
             log.error("Metrics are not set for XDCR")
-            exit(1)
+            exit(2)
 
 
 # Validates metric config
@@ -363,6 +360,7 @@ def main():
     if "n1ql" in services:
         process_query_stats(host, cluster_name)
 
+    return 0
 
 if __name__ == "__main__":
         main()

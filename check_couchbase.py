@@ -33,6 +33,7 @@ from sys import exit, stderr
 # Basic setup
 parser = ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
 parser.add_argument("-c", "--config", dest="config_file", action="store", help="Path to the check_couchbase YAML file")
+parser.add_argument("-n", dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
 parser.add_argument("-v", dest="verbose", action="store_true", help="Enable debug logging to console")
 args = parser.parse_args()
 
@@ -45,6 +46,9 @@ if args.verbose:
     config["logging"]["handlers"]["console"]["level"] = "DEBUG"
 
 logging.config.dictConfig(config["logging"])
+
+if args.no_metrics:
+    config["send_metrics"] = "false"
 
 
 # Adds the ANSI bold escape sequence

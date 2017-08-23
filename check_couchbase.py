@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=utf-8
 
 """
 Collects statistics from the Couchbase REST API.

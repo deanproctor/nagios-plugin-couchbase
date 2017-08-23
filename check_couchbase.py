@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # coding=utf-8
 
 """
@@ -51,7 +51,7 @@ logging.config.dictConfig(config["logging"])
 # Sends a passive check result to Nagios
 def send(host, service, status, message):
     line = "{0}\t{1}\t{2}\t{3}\n".format(host, service, status, message)
-    log.debug(line.expandtabs(1))
+    log.debug(line.rstrip().expandtabs(1))
 
     if config["send_metrics"] == "false":
         return

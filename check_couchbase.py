@@ -24,7 +24,7 @@ from argparse import ArgumentParser
 from base64 import b64encode
 from numbers import Number
 from subprocess import Popen, PIPE
-from sys import stderr
+from sys import exit, stderr
 
 try:
     from urllib import quote_plus
@@ -56,7 +56,7 @@ logging.config.dictConfig(config["logging"])
 # Sends a passive check result to Nagios
 def send(host, service, status, message):
     line = "{0}\t{1}\t{2}\t{3}\n".format(host, service, status, message)
-    log.debug(line)
+    log.debug(line.expandtabs(1))
 
     if config["send_metrics"] == "false":
         return
@@ -114,7 +114,7 @@ def compare(inp, relate, cut):
 
 # Builds the nagios service description based on config
 def build_service_description(description, cluster_name, label):
-    # Format will be {prefix} {cluster_name} {label} - {service_description}
+    # Format will be {prefix} {cluster_name} {label} - {description}
     service = config["prefix"]
 
     if config["service_include_cluster_name"] and cluster_name:
@@ -134,7 +134,7 @@ def eval_status(value, critical, warning, op):
         return 2, "CRITICAL"
     elif isinstance(critical, basestring) and compare(value, op, critical):
         return 2, "CRITICAL"
-    elif isinstance(warning, Number) and compare(value, op,    warning):
+    elif isinstance(warning, Number) and compare(value, op, warning):
         return 1, "WARNING"
     elif isinstance(warning, basestring) and compare(value, op, warning):
         return 1, "WARNING"
@@ -184,16 +184,19 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
 
                     uri = "/pools/default/buckets/{0}/stats/{1}".format(bucket, quote_plus("replications/{0}/{1}".format(task["id"], m["metric"])))
                     stats = couchbase_request(uri)
+
                     for node in stats["nodeStats"]:
                         if host == node.split(":")[0]:
+                            if len(stats["nodeStats"][node]) == 0:
+                                log.error("Invalid XDCR metric: {0}".format(m["metric"]))
+                                return
+
                             value = sum(stats["nodeStats"][node], 0) / len(stats["nodeStats"][node])
                             service = build_service_description(m["description"], cluster_name, "xdcr")
                             status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
                             message = "{0} - {1}: {2}".format(status_text, m["metric"], str(value))
 
                             send(host, service, status, message)
-            else:
-                log.error("XDCR not running")
 
 
 # Evaluates query service stats and sends check results
@@ -278,7 +281,7 @@ def validate_config():
         log.error("Data service metrics are required")
         exit(1)
 
-    if "node" not in config:
+    if "node" not in config or "metrics" not in config["node"]:
         log.error("Node metrics are required")
         exit(1)
 

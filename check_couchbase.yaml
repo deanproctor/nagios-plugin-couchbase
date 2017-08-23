@@ -98,12 +98,15 @@ service_include_label: True
 #    The default operator is ">="
 
 # Data service
-#   Metrics are configurable by bucket, allowing thresholds to be customized.
+#  Metrics are configurable by bucket, allowing thresholds to be customized.
 #
-#   The bucket name is specified by the "bucket" parameter.
+#  The bucket name is specified by the "bucket" parameter.
 #
-#   Special name "_all" will evaluate the configured metrics and thresholds for 
-#   all buckets
+#  Special name "_all" will evaluate the configured metrics and thresholds for 
+#  all buckets
+#
+#  Metric names are documented here: 
+#  https://github.com/couchbase/ep-engine/blob/master/docs/stats.org
 data: 
   - bucket: _all
     metrics:
@@ -169,8 +172,8 @@ data:
       crit: 1
     - metric: ep_kv_size
       description: KV size
-      warn: 50000 
-      crit: 100000
+      warn: 50000000 
+      crit: 100000000
     - metric: vb_active_resident_items_ratio
       description: percent active items in memory
       warn: 50
@@ -187,8 +190,8 @@ data:
       op: "<"
 
 # Query service
-# All metric names documented here (under Vitals):
-# https://developer.couchbase.com/documentation/server/current/tools/query-monitoring.html
+#  All metric names documented here (under Vitals):
+#  https://developer.couchbase.com/documentation/server/current/tools/query-monitoring.html
 query:
   metrics:
     - metric: request_time.80percentile
@@ -221,8 +224,8 @@ query:
       crit: 750
 
 # XDCR
-# All metric names documented here:
-# https://developer.couchbase.com/documentation/server/current/rest-api/rest-xdcr-statistics.html
+#  All metric names documented here:
+#  https://developer.couchbase.com/documentation/server/current/rest-api/rest-xdcr-statistics.html
 xdcr:
   metrics:
     - metric: changes_left
@@ -257,7 +260,7 @@ logging:
   version: 1
   formatters:
     simple:
-      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+      format: "%(asctime)s - %(levelname)s - %(message)s"
   handlers:
     console:
       class: logging.StreamHandler

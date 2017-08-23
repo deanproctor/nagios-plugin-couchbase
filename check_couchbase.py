@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding=utf-8
 
 """
@@ -7,34 +7,29 @@ See: https://developer.couchbase.com/documentation/server/current/rest-api/rest-
 
 #### Dependencies
 
+ * python-requests
  * PyYAML
  * nsca-ng
 
 """
 
+import json
 import logging as log
 import logging.config
 import operator
 import os
 import ssl
-import urllib2
 import yaml
+import requests
 
 from argparse import ArgumentParser
 from base64 import b64encode
 from numbers import Number
+from requests.utils import quote
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from subprocess import Popen, PIPE
 from sys import exit, stderr
 
-try:
-    from urllib import quote_plus
-except ImportError:
-    from urllib.parse import quote_plus
-
-try:
-    import json
-except ImportError:
-    import simplejson as json
 
 # Basic setup
 parser = ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
@@ -68,7 +63,7 @@ def send(host, service, status, message):
     cmd = "{0} -H {1} -p {2}".format(config["nsca_path"], str(config["nagios_host"]), str(config["nsca_port"]))
 
     pipe = Popen(cmd, shell=True, stdin=PIPE)
-    pipe.communicate(line)
+    pipe.communicate(line.encode())
     pipe.stdin.close()
     pipe.wait()
 
@@ -89,16 +84,13 @@ def couchbase_request(uri, service=None):
 
     url = "{0}://{1}:{2}{3}".format(protocol, host, str(port), uri)
 
-    auth_string = b64encode("{0}:{1}".format(config["couchbase_user"], config["couchbase_password"]))
-
-    request = urllib2.Request(url)
-    request.add_header("Authorization", "Basic {0}".format(auth_string))
-
     try:
-        f = urllib2.urlopen(request, context=ssl.SSLContext(ssl.PROTOCOL_TLSv1))
-        return json.load(f)
-    except urllib2.HTTPError:
+        requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+        f = requests.get(url, auth=(config["couchbase_user"], config["couchbase_password"]), verify=False)
+        return json.loads(f.text)
+    except:
         log.error("Failed to complete request to Couchbase: {0}, verify couchbase_user and couchbase_password settings".format(url))
+        raise
 
 
 # For dynamic comparisons
@@ -132,11 +124,11 @@ def build_service_description(description, cluster_name, label):
 def eval_status(value, critical, warning, op):
     if isinstance(critical, Number) and compare(value, op, critical):
         return 2, "CRITICAL"
-    elif isinstance(critical, basestring) and compare(value, op, critical):
+    elif isinstance(critical, str) and compare(value, op, critical):
         return 2, "CRITICAL"
     elif isinstance(warning, Number) and compare(value, op, warning):
         return 1, "WARNING"
-    elif isinstance(warning, basestring) and compare(value, op, warning):
+    elif isinstance(warning, str) and compare(value, op, warning):
         return 1, "WARNING"
     else:
         return 0, "OK"
@@ -182,7 +174,7 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
                     m.setdefault("warn", None)
                     m.setdefault("op", ">=")
 
-                    uri = "/pools/default/buckets/{0}/stats/{1}".format(bucket, quote_plus("replications/{0}/{1}".format(task["id"], m["metric"])))
+                    uri = "/pools/default/buckets/{0}/stats/{1}".format(bucket, quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe=""))
                     stats = couchbase_request(uri)
 
                     for node in stats["nodeStats"]:
@@ -217,6 +209,9 @@ def process_query_stats(host, cluster_name):
             continue
 
         value = samples[m["metric"]]
+
+        if type(value) is str:
+            continue # Need to fix timings strings in /admin/vitals
 
         service = build_service_description(m["description"], cluster_name, "query")
         status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
@@ -328,9 +323,13 @@ def main():
     validate_config()
 
     tasks = couchbase_request("/pools/default/tasks")
-
     pools_default = couchbase_request("/pools/default")
-    cluster_name = pools_default["clusterName"]
+
+    if "clusterName" in pools_default:
+        cluster_name = pools_default["clusterName"]
+    else:
+        cluster_name = None
+
     nodes = pools_default["nodes"]
     for node in nodes:
         if "thisNode" in node:

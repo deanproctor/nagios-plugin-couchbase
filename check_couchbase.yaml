@@ -196,16 +196,16 @@ query:
   metrics:
     - metric: request_time.80percentile
       description: 80th percentile query response time
-      warn: 0.1 
-      crit: 0.2 
+      warn: 100
+      crit: 200
     - metric: request_time.95percentile
       description: 95th percentile query response time
-      warn: 0.2 
-      crit: 0.3
+      warn: 200
+      crit: 300
     - metric: request_time.99percentile
       description: 99th percentile query response time 
-      warn: 0.4 
-      crit: 0.5 
+      warn: 400
+      crit: 500
     - metric: request.active.count
       description: active N1QL requests
       warn: 1000 

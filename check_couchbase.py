@@ -92,7 +92,13 @@ def couchbase_request(uri, service=None):
     try:
         requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
         f = requests.get(url, auth=(config["couchbase_user"], config["couchbase_password"]), verify=False)
-        return json.loads(f.text)
+        response = json.loads(f.text)
+
+        if("permissions" in response):
+            log.error("{0}: {1}".format(response["message"], response["permissions"]))
+            exit(1)
+
+        return response
     except:
         log.error("Failed to complete request to Couchbase: {0}, verify couchbase_user and couchbase_password settings".format(url))
         raise

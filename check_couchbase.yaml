@@ -78,7 +78,7 @@ service_include_label: True
 # METRICS AND THRESHOLDS
 #
 #
-#  Metrics are monitored by service: data, query, index, fts, xdcr 
+#  Metrics are monitored by service: data, query, index, fts, xdcr, node 
 #
 #  Metrics have 5 possible values:
 #    Required:
@@ -96,10 +96,6 @@ service_include_label: True
 #    "op" allows you to define the operator used when evaluating thresholds
 #    againt the current value.  Options are: ">", ">=", "=", "<=", "<"
 #    The default operator is ">="
-#
-# Every node includes an implicit "status" metric.  "status" is a meta metric
-# defined by Couchbase to quickly asertain whether health of the node.  Possible
-# values are "healthy" and "unhealthy" 
 
 # Data service
 #   Metrics are configurable by bucket, allowing thresholds to be customized.
@@ -238,6 +234,20 @@ xdcr:
       warn: 50000000
       crit: 100000000
 
+# Node Stats
+node:
+  metrics:
+    - metric: status
+      description: health status
+      warn: warmup
+      crit: unhealthy
+      op: "="
+    - metric: clusterMembership 
+      description: cluster membership
+      warn: inactiveAdded
+      crit: inactiveFailed
+      op: "="
+
 #
 #
 # PYTHON LOGGING
@@ -247,7 +257,7 @@ logging:
   version: 1
   formatters:
     simple:
-      format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   handlers:
     console:
       class: logging.StreamHandler

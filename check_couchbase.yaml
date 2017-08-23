@@ -20,8 +20,8 @@ couchbase_admin_port: 18091
 couchbase_query_port: 18093
 
 # Admin username
-# < Couchbase 5: recommended to use the Read-Only Administrator
-# >= Couchbase 5: admin user should only have the Data Monitoring role
+#  < Couchbase 5: recommended to use the Read-Only Administrator
+#  >= Couchbase 5: admin user should only have the Data Monitoring role
 couchbase_user: readonly
 
 # Admin password
@@ -58,7 +58,7 @@ nsca_path: /sbin/send_nsca
 #
 #  These settings define how the Nagios service name should be constructed.
 #  The service name format will be:
-#   {prefix} {cluster} {label} - {metric description}
+#   {prefix} {cluster name} {label} - {metric description}
 
 # Nagios service prefix
 service_prefix: Couchbase
@@ -67,8 +67,8 @@ service_prefix: Couchbase
 service_include_cluster_name: True
 
 # Include the label in the service description
-# Data service label is the bucket name
-# Other services use the service name, e.g. "query" or "xdcr"
+#  Data service label is the bucket name
+#  Other services use the service name, e.g. "query" or "xdcr"
 service_include_label: True
 
 
@@ -192,63 +192,60 @@ data:
 #  All metric names documented here (under Vitals):
 #  https://developer.couchbase.com/documentation/server/current/tools/query-monitoring.html
 query:
-  metrics:
-    - metric: request_timer.75%
-      description: 75th percentile query response time
-      warn: 100000000  # Nanoseconds
-      crit: 200000000  # Nanoseconds
-    - metric: request_timer.95%
-      description: 95th percentile query response time
-      warn: 200000000  # Nanoseconds
-      crit: 300000000  # Nanoseconds
-    - metric: request_timer.99%
-      description: 99th percentile query response time
-      warn: 400000000  # Nanoseconds
-      crit: 500000000  # Nanoseconds
-    - metric: active_requests.count
-      description: active N1QL requests
-      warn: 1000
-      crit: 1500
-    - metric: request_rate.1m.rate
-      description: query throughput 1 minute
-      warn: 900
-      crit: 950
-    - metric: request_rate.5m.rate
-      description: query throughput 5 minute
-      warn: 800
-      crit: 850
-    - metric: request_rate.15m.rate
-      description: query throughput 15 minute
-      warn: 700
-      crit: 750
+  - metric: request_timer.75%
+    description: 75th percentile query response time
+    warn: 100000000  # Nanoseconds
+    crit: 200000000  # Nanoseconds
+  - metric: request_timer.95%
+    description: 95th percentile query response time
+    warn: 200000000  # Nanoseconds
+    crit: 300000000  # Nanoseconds
+  - metric: request_timer.99%
+    description: 99th percentile query response time
+    warn: 400000000  # Nanoseconds
+    crit: 500000000  # Nanoseconds
+  - metric: active_requests.count
+    description: active N1QL requests
+    warn: 1000
+    crit: 1500
+  - metric: request_rate.1m.rate
+    description: query throughput 1 minute
+    warn: 900
+    crit: 950
+  - metric: request_rate.5m.rate
+    description: query throughput 5 minute
+    warn: 800
+    crit: 850
+  - metric: request_rate.15m.rate
+    description: query throughput 15 minute
+    warn: 700
+    crit: 750
 
 # XDCR
 #  All metric names documented here:
 #  https://developer.couchbase.com/documentation/server/current/rest-api/rest-xdcr-statistics.html
 xdcr:
-  metrics:
-    - metric: changes_left
-      description: documents pending replication
-      warn: 2500
-      crit: 5000
-    - metric: bandwidth_usage
-      description: bytes replicated per second
-      warn: 12500000  # 100 Mbps
-      crit: 25000000  # 200 Mbps
+  - metric: changes_left
+    description: documents pending replication
+    warn: 2500
+    crit: 5000
+  - metric: bandwidth_usage
+    description: bytes replicated per second
+    warn: 12500000  # 100 Mbps
+    crit: 25000000  # 200 Mbps
 
 # Node Stats
 node:
-  metrics:
-    - metric: status
-      description: health status
-      warn: warmup
-      crit: unhealthy
-      op: "="
-    - metric: clusterMembership
-      description: cluster membership
-      warn: inactiveAdded
-      crit: inactiveFailed
-      op: "="
+  - metric: status
+    description: health status
+    warn: warmup
+    crit: unhealthy
+    op: "="
+  - metric: clusterMembership
+    description: cluster membership
+    warn: inactiveAdded
+    crit: inactiveFailed
+    op: "="
 
 #
 #

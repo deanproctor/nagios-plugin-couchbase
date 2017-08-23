@@ -33,6 +33,7 @@ from sys import exit, stderr
 # Basic setup
 parser = ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
 parser.add_argument("-c", "--config", required=True, dest="config_file", action="store", help="Path to the check_couchbase YAML file")
+parser.add_argument("-d", "--dump-services",  dest="dump_services", action="store_true", help="Print Nagios service descriptions and exit")
 parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
 parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="Enable debug logging to console")
 args = parser.parse_args()
@@ -44,8 +45,11 @@ if args.verbose:
 
 logging.config.dictConfig(config["logging"])
 
+if args.dump_services:
+    config["dump_services"] = True
+
 if args.no_metrics:
-    config["send_metrics"] = "false"
+    config["send_metrics"] = False
 
 
 # Adds the ANSI bold escape sequence
@@ -55,10 +59,14 @@ def bold(string):
 
 # Sends a passive check result to Nagios
 def send(host, service, status, message):
+    if config["dump_services"]:
+        print service
+        return
+
     line = "{0}\t{1}\t{2}\t{3}\n".format(host, service, status, message)
     log.debug("{0} {1} {2} {3} {4} {5} {6} {7}".format(bold("Host:"), host, bold("Service:"), service, bold("Status:"), status, bold("Message:"), message))
 
-    if config["send_metrics"] == "false":
+    if config["send_metrics"] is False:
         return
 
     if not os.path.exists(config["nsca_path"]):
@@ -116,17 +124,23 @@ def compare(inp, relate, cut):
 
 
 # Builds the nagios service description based on config
+# Format will be {service_prefix} {cluster_name} {label} - {description}
 def build_service_description(description, cluster_name, label):
-    # Format will be {service_prefix} {cluster_name} {label} - {description}
-    service = config["service_prefix"]
+    service = ""
+
+    if "service_prefix" in config:
+        service += config["service_prefix"]
 
     if config["service_include_cluster_name"] and cluster_name:
-        service = "{0} {1}".format(service, cluster_name)
+        service += " {0}".format(cluster_name)
 
     if config["service_include_label"]:
-        service = "{0} {1}".format(service, label)
+        service += " {0}".format(label)
 
-    service = "{0} - {1}".format(service, description)
+    if service != "":
+        service += " - "
+
+    service += description
 
     return service
 
@@ -175,7 +189,7 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
         log.warning("XDCR is running but no metrics are configured")
         return
 
-    metrics = config["xdcr"]["metrics"]
+    metrics = config["xdcr"]
 
     for task in tasks:
         if task["type"] == "xdcr" and task["source"] == bucket:
@@ -208,7 +222,7 @@ def process_query_stats(host, cluster_name):
         log.warning("Query service is running but no metrics are configured")
         return
 
-    metrics = config["query"]["metrics"]
+    metrics = config["query"]
     samples = couchbase_request("/admin/stats", "query")
 
     for m in metrics:
@@ -229,7 +243,7 @@ def process_query_stats(host, cluster_name):
 
 
 def process_node_stats(stats, host, cluster_name):
-    metrics = config["node"]["metrics"]
+    metrics = config["node"]
 
     for m in metrics:
         m.setdefault("crit", None)
@@ -257,14 +271,15 @@ def validate_config():
     config.setdefault("couchbase_ssl", True)
     config.setdefault("nsca_port", 5668)
     config.setdefault("nsca_path", "/sbin/send_nsca")
-    config.setdefault("service_prefix", "CB")
-    config.setdefault("service_include_cluster_name", True)
-    config.setdefault("service_include_bucket_name", True)
+    config.setdefault("service_include_cluster_name", False)
+    config.setdefault("service_include_label", False)
+    config.setdefault("send_metrics", True)
+    config.setdefault("dump_services", False)
 
     # For docker environments
     env_couchbase_host = os.getenv("COUCHBASE_HOST", None)
     env_nagios_host = os.getenv("NAGIOS_HOST", None)
-    env_send_metrics = os.getenv("SEND_METRICS", "true")
+    env_send_metrics = os.getenv("SEND_METRICS", None)
 
     if env_couchbase_host:
         config["couchbase_host"] = env_couchbase_host
@@ -272,7 +287,8 @@ def validate_config():
     if env_nagios_host:
         config["nagios_host"] = env_nagios_host
 
-    config["send_metrics"] = env_send_metrics
+    if env_send_metrics:
+        config["send_metrics"] = False
 
     # Unrecoverable errors
     for item in ["couchbase_user", "couchbase_password", "nagios_host", "nsca_password"]:
@@ -280,29 +296,21 @@ def validate_config():
             log.error("{0} is not set".format(item))
             exit(2)
 
+    if "node" not in config:
+        log.error("Node metrics are required")
+        exit(2)
+
     if "data" not in config:
         log.error("Data service metrics are required")
         exit(2)
 
-    if "node" not in config or "metrics" not in config["node"]:
-        log.error("Node metrics are required")
-        exit(2)
-
     for item in config["data"]:
-        if "bucket" not in item:
+        if "bucket" not in item or item["bucket"] is None:
             log.error("Bucket name is not set")
             exit(2)
 
-        if "metrics" not in item:
-            log.error("Metrics are not set for bucket: {0}".format(item["bucket"]))
-            exit(2)
-
-    if "query" in config and "metrics" not in config["query"]:
-            log.error("Metrics are not set for query service")
-            exit(2)
-
-    if "xdcr" in config and "metrics" not in config["xdcr"]:
-            log.error("Metrics are not set for XDCR")
+        if "metrics" not in item or item["metrics"] is None:
+            log.error("Metrics are not set for bucket {0}".format(item["bucket"]))
             exit(2)
 
 

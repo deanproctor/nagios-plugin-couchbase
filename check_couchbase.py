@@ -60,7 +60,7 @@ def bold(string):
 # Sends a passive check result to Nagios
 def send(host, service, status, message):
     if config["dump_services"]:
-        print service
+        print(service)
         return
 
     line = "{0}\t{1}\t{2}\t{3}\n".format(host, service, status, message)

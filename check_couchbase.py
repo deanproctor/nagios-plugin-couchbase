@@ -111,8 +111,8 @@ def compare(inp, relate, cut):
 
 # Builds the nagios service description based on config
 def build_service_description(description, cluster_name, label):
-    # Format will be {prefix} {cluster_name} {label} - {description}
-    service = config["prefix"]
+    # Format will be {service_prefix} {cluster_name} {label} - {description}
+    service = config["service_prefix"]
 
     if config["service_include_cluster_name"] and cluster_name:
         service = "{0} {1}".format(service, cluster_name)
@@ -251,7 +251,7 @@ def validate_config():
     config.setdefault("couchbase_ssl", True)
     config.setdefault("nsca_port", 5668)
     config.setdefault("nsca_path", "/sbin/send_nsca")
-    config.setdefault("prefix", "CB")
+    config.setdefault("service_prefix", "CB")
     config.setdefault("service_include_cluster_name", True)
     config.setdefault("service_include_bucket_name", True)
 

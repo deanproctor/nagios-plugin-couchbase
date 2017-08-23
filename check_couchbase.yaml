@@ -136,7 +136,7 @@ data:
     - metric: curr_connections
       description: client connections
       warn: 500
-      crit: 1000
+      crit: 1000  # Backoffs are sent at 10,0000 
     - metric: ep_diskqueue_items
       description: items in disk write queue
       warn: 10000
@@ -171,21 +171,21 @@ data:
       crit: 1
     - metric: ep_kv_size
       description: KV size
-      warn: 50000000
-      crit: 100000000
+      warn: 50000000   # Bytes
+      crit: 100000000  # Bytes
     - metric: vb_active_resident_items_ratio
       description: percent active items in memory
       warn: 50
-      crit: 15
+      crit: 15  # Should never be less than 15%
       op: "<"
     - metric: vb_replica_resident_items_ratio
       description: percent replica items in memory
       warn: 50
-      crit: 15
+      crit: 15  # Should never be less than 15%
       op: "<"
     - metric: vb_active_num
       description: number of active vbuckets
-      crit: 1024
+      crit: 1024  # Should always be 1024
       op: "<"
 
 # Query service
@@ -195,16 +195,16 @@ query:
   metrics:
     - metric: request_timer.75%
       description: 75th percentile query response time
-      warn: 100  # Nanoseconds
-      crit: 200  # Nanoseconds
+      warn: 100000000  # Nanoseconds
+      crit: 200000000  # Nanoseconds
     - metric: request_timer.95%
       description: 95th percentile query response time
-      warn: 200  # Nanoseconds
-      crit: 300  # Nanoseconds
+      warn: 200000000  # Nanoseconds
+      crit: 300000000  # Nanoseconds
     - metric: request_timer.99%
       description: 99th percentile query response time
-      warn: 400  # Nanoseconds
-      crit: 500  # Nanoseconds
+      warn: 400000000  # Nanoseconds
+      crit: 500000000  # Nanoseconds
     - metric: active_requests.count
       description: active N1QL requests
       warn: 1000
@@ -232,9 +232,9 @@ xdcr:
       warn: 2500
       crit: 5000
     - metric: bandwidth_usage
-      description: bandwidth used for replication
-      warn: 50000000
-      crit: 100000000
+      description: bytes replicated per second
+      warn: 12500000  # 100 Mbps
+      crit: 25000000  # 200 Mbps
 
 # Node Stats
 node:
@@ -259,7 +259,7 @@ logging:
   version: 1
   formatters:
     simple:
-      format: "%(asctime)s - %(levelname)s - %(message)s"
+      format: "%(asctime)s %(levelname)s %(message)s"
   handlers:
     console:
       class: logging.StreamHandler

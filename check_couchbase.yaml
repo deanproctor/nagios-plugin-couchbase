@@ -9,26 +9,26 @@ couchbase_host: localhost
 
 # Couchbase admin port
 #  Defaults:
-#    8091 (non-SSL)
-#    18091 (SSL)
+#  8091 (non-SSL)
+#  18091 (SSL)
 couchbase_admin_port: 18091
 
 # Couchbase query port
 #  Defaults:
-#    8093 (non-SSL)
-#    18093 (SSL)
+#  8093 (non-SSL)
+#  18093 (SSL)
 couchbase_query_port: 18093
 
 # Admin username
-#  <  Couchbase 5: recommended to use the Read-Only Administrator
-#  >= Couchbase 5: admin user should only have the Data Monitoring role
+# < Couchbase 5: recommended to use the Read-Only Administrator
+# >= Couchbase 5: admin user should only have the Data Monitoring role
 couchbase_user: readonly
 
 # Admin password
 couchbase_password: secret
 
 # Use SSL when talking to Couchbase
-#  Must also use the correct port above
+# Must also use the correct port above
 couchbase_ssl: True
 
 
@@ -37,7 +37,6 @@ couchbase_ssl: True
 # NAGIOS CONNECTION
 #
 #
-
 # IP address or hostname of the Nagios server
 nagios_host: 10.0.2.2
 
@@ -49,20 +48,20 @@ nsca_port: 5668
 nsca_password: secret
 
 # Path to the send_nsca binary
-nsca_path: /sbin/send_nsca 
+nsca_path: /sbin/send_nsca
 
 
 #
 #
-# SERVICE NAME 
+# SERVICE NAME
 #
 #
-# These settings define how the Nagios service name should be constructed.
-# The service name format will be:
-#  {prefix} {cluster} {label} - {metric description}
+#  These settings define how the Nagios service name should be constructed.
+#  The service name format will be:
+#   {prefix} {cluster} {label} - {metric description}
 
 # Nagios service prefix
-service_prefix: CB
+service_prefix: Couchbase
 
 # Include the cluster name in the service description
 service_include_cluster_name: True
@@ -78,36 +77,36 @@ service_include_label: True
 # METRICS AND THRESHOLDS
 #
 #
-#  Metrics are monitored by service: data, query, index, fts, xdcr, node 
+#  Metrics are monitored by service: data, query, index, fts, xdcr, node
 #
 #  Metrics have 5 possible values:
-#    Required:
-#      metric: the Couchbase REST API metric to check
-#      description: used to construct the Nagios service name 
-#    Optional:
-#      warn: the warning alert threshold
-#      crit: the critical alert threshold
-#      op: operator used to compare the current value against the thresholds
+#  Required:
+#    metric: the Couchbase REST API metric to check
+#    description: used to construct the Nagios service name
+#  Optional:
+#    warn: the warning alert threshold
+#    crit: the critical alert threshold
+#    op: operator used to compare the current value against the thresholds
 #
-#    The statuses sent to Nagios are defined by the configured thresholds along
-#    with an implicit "OK".  Not specifying thresholds will result in "OK" 
-#    always being sent to Nagios. 
+#  The statuses sent to Nagios are defined by the configured thresholds along
+#  with an implicit "OK".  Not specifying thresholds will result in "OK"
+#  always being sent to Nagios.
 #
-#    "op" allows you to define the operator used when evaluating thresholds
-#    againt the current value.  Options are: ">", ">=", "=", "<=", "<"
-#    The default operator is ">="
+#  "op" allows you to define the operator used when evaluating thresholds
+#  againt the current value.  Options are: ">", ">=", "=", "<=", "<"
+#  The default operator is ">="
 
 # Data service
 #  Metrics are configurable by bucket, allowing thresholds to be customized.
 #
 #  The bucket name is specified by the "bucket" parameter.
 #
-#  Special name "_all" will evaluate the configured metrics and thresholds for 
+#  Special name "_all" will evaluate the configured metrics and thresholds for
 #  all buckets
 #
-#  Metric names are documented here: 
+#  Metric names are documented here:
 #  https://github.com/couchbase/ep-engine/blob/master/docs/stats.org
-data: 
+data:
   - bucket: _all
     metrics:
     - metric: cmd_get
@@ -115,20 +114,20 @@ data:
       warn: 5000
       crit: 10000
     - metric: cmd_set
-      description: sets per second 
-      warn: 5000 
-      crit: 10000 
+      description: sets per second
+      warn: 5000
+      crit: 10000
     - metric: delete_hits
       description: deletes per second
       warn: 500
       crit: 1000
     - metric: ep_bg_fetched
       description: cache misses per second
-      warn: 100 
+      warn: 100
       crit: 500
     - metric: couch_docs_fragmentation
-      description: percent data fragmentation 
-      warn: 35 
+      description: percent data fragmentation
+      warn: 35
       crit: 50
     - metric: couch_views_fragmentation
       description: percent views fragmentation
@@ -139,7 +138,7 @@ data:
       warn: 500
       crit: 1000
     - metric: ep_diskqueue_items
-      description: items in disk write queue 
+      description: items in disk write queue
       warn: 10000
       crit: 50000
     - metric: ep_dcp_replica_items_remaining
@@ -151,7 +150,7 @@ data:
       warn: 5000
       crit: 10000
     - metric: ep_dcp_views_items_remaining
-      description: items in views indexer queue 
+      description: items in views indexer queue
       warn: 5000
       crit: 10000
     - metric: ep_dcp_replica_backoff
@@ -172,7 +171,7 @@ data:
       crit: 1
     - metric: ep_kv_size
       description: KV size
-      warn: 50000000 
+      warn: 50000000
       crit: 100000000
     - metric: vb_active_resident_items_ratio
       description: percent active items in memory
@@ -194,32 +193,32 @@ data:
 #  https://developer.couchbase.com/documentation/server/current/tools/query-monitoring.html
 query:
   metrics:
-    - metric: request_time.80percentile
-      description: 80th percentile query response time
-      warn: 100
-      crit: 200
-    - metric: request_time.95percentile
+    - metric: request_timer.75%
+      description: 75th percentile query response time
+      warn: 100  # Nanoseconds
+      crit: 200  # Nanoseconds
+    - metric: request_timer.95%
       description: 95th percentile query response time
-      warn: 200
-      crit: 300
-    - metric: request_time.99percentile
-      description: 99th percentile query response time 
-      warn: 400
-      crit: 500
-    - metric: request.active.count
+      warn: 200  # Nanoseconds
+      crit: 300  # Nanoseconds
+    - metric: request_timer.99%
+      description: 99th percentile query response time
+      warn: 400  # Nanoseconds
+      crit: 500  # Nanoseconds
+    - metric: active_requests.count
       description: active N1QL requests
-      warn: 1000 
+      warn: 1000
       crit: 1500
-    - metric: request.per.sec.1min
-      description: query throughput 1 minute 
-      warn: 900 
+    - metric: request_rate.1m.rate
+      description: query throughput 1 minute
+      warn: 900
       crit: 950
-    - metric: request.per.sec.5min
-      description: query throughput 5 minute 
-      warn: 800 
+    - metric: request_rate.5m.rate
+      description: query throughput 5 minute
+      warn: 800
       crit: 850
-    - metric: request.per.sec.15min
-      description: query throughput 15 minute 
+    - metric: request_rate.15m.rate
+      description: query throughput 15 minute
       warn: 700
       crit: 750
 
@@ -231,9 +230,9 @@ xdcr:
     - metric: changes_left
       description: documents pending replication
       warn: 2500
-      crit: 5000 
+      crit: 5000
     - metric: bandwidth_usage
-      description: bandwidth used for replication 
+      description: bandwidth used for replication
       warn: 50000000
       crit: 100000000
 
@@ -245,7 +244,7 @@ node:
       warn: warmup
       crit: unhealthy
       op: "="
-    - metric: clusterMembership 
+    - metric: clusterMembership
       description: cluster membership
       warn: inactiveAdded
       crit: inactiveFailed

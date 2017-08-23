@@ -48,10 +48,15 @@ if args.verbose:
 logging.config.dictConfig(config["logging"])
 
 
+# Adds the ANSI bold escape sequence
+def bold(string):
+    return "\033[1m{0}\033[0m".format(string)
+
+
 # Sends a passive check result to Nagios
 def send(host, service, status, message):
     line = "{0}\t{1}\t{2}\t{3}\n".format(host, service, status, message)
-    log.debug(line.rstrip().expandtabs(1))
+    log.debug("{0} {1} {2} {3} {4} {5} {6} {7}".format(bold("Host:"), host, bold("Service:"), service, bold("Status:"), status, bold("Message:"), message))
 
     if config["send_metrics"] == "false":
         return
@@ -198,7 +203,7 @@ def process_query_stats(host, cluster_name):
         return
 
     metrics = config["query"]["metrics"]
-    samples = couchbase_request("/admin/vitals", "query")
+    samples = couchbase_request("/admin/stats", "query")
 
     for m in metrics:
         m.setdefault("crit", None)
@@ -209,9 +214,6 @@ def process_query_stats(host, cluster_name):
             continue
 
         value = samples[m["metric"]]
-
-        if type(value) is str:
-            continue # Need to fix timings strings in /admin/vitals
 
         service = build_service_description(m["description"], cluster_name, "query")
         status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])

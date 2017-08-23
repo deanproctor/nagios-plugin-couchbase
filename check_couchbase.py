@@ -205,14 +205,14 @@ def validate_config():
       log.error(item + ' is not set')
       exit(1)
 
-  if 'buckets' in config:
-    for bucket in config['buckets']:
-      if 'name' not in bucket:
+  if 'data' in config:
+    for item in config['data']:
+      if 'bucket' not in item:
         log.error('Bucket name is not set')
         exit(1)
 
-      if 'metrics' not in bucket:
-        log.error('Metrics are not set for bucket: ' + bucket['name'])
+      if 'metrics' not in item:
+        log.error('Metrics are not set for bucket: ' + item['bucket'])
         exit(1)
 
 
@@ -228,13 +228,13 @@ def main():
       services = node['services']
 
   if 'kv' in services:
-    for bucket in config['buckets']:
+    for item in config['data']:
       # _all is a special case where we process stats for all buckets
-      if bucket['name'] == '_all':
+      if item['bucket'] == '_all':
         for b in couchbase_request('/pools/default/buckets/'):
-          process_bucket_stats(b['name'], bucket['metrics'], host, cluster_name)
+          process_bucket_stats(b['name'], item['metrics'], host, cluster_name)
       else:
-        process_bucket_stats(bucket['name'], bucket['metrics'], host, cluster_name)
+        process_bucket_stats(item['bucket'], item['metrics'], host, cluster_name)
         
   if 'n1ql' in services:
     print 'n1ql'

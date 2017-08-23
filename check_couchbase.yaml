@@ -1,6 +1,9 @@
 #
-# Couchbase Config
 #
+# COUCHBASE CONNECTION
+#
+#
+
 # IP address or hostname of the local Couchbase node as configured in Couchbase
 couchbase_host: localhost
 
@@ -22,8 +25,11 @@ couchbase_ssl: True
 
 
 #
-# Nagios Config
 #
+# NAGIOS CONNECTION
+#
+#
+
 # IP address or hostname of the Nagios server
 nagios_host: 10.0.2.2
 
@@ -39,10 +45,15 @@ nsca_path: /sbin/send_nsca
 
 
 #
-# Monitoring Options
 #
+# SERVICE NAME 
+#
+#
+# These settings define how the Nagios service name should be constructed.
+# The service name format will be:
+#  {prefix} {cluster} {bucket} - {metric description}
+
 # Nagios service prefix
-# Service name format will be: {prefix} {cluster} {bucket} - {metric description}
 service_prefix: CB
 
 # Include the cluster name in the service description
@@ -51,21 +62,45 @@ service_include_cluster_name: True
 # Include the bucket name in the service description
 service_include_bucket_name: True
 
-# Metrics by bucket
-# name: the bucket name, special name _all will evaluate the configured metrics and thresholds for all buckets
-# metric: the Couchbase REST API metric to check
-# warn: the warning threshold
-# crit: the critical threshold
-# op: the operator to use when comparing the current value against the thresholds, e.g. current_value > threshold
-  # options: ">", ">=", "=", "<=", "<"
-  # default: ">="
-buckets: 
-  - name: _all
+
+#
+#
+# METRICS AND THRESHOLDS
+#
+#
+#  Metrics are monitored by service: data, query, index, fts 
+#
+#  Metrics have 5 possible values:
+#    Required:
+#      metric: the Couchbase REST API metric to check
+#      description: used to construct the Nagios service name 
+#    Optional:
+#      warn: the warning alert threshold
+#      crit: the critical alert threshold
+#      op: operator used to compare the current value against the thresholds
+#
+#    The statuses sent to Nagios are defined by the configured thresholds along
+#    with an implicit "OK".  Not specifying thresholds will result in "OK" 
+#    always being sent to Nagios. 
+#
+#    "op" allows you to define the operator used when evaluating thresholds
+#    againt the current value.  Options are: ">", ">=", "=", "<=", "<"
+#    The default operator is ">="
+#
+# Every node includes an implicit "status" metric.  "status" is a meta metric
+# defined by Couchbase to quickly asertain whether health of the node.  Possible
+# values are "healthy" and "unhealthy" 
+
+# Data service
+#   Metrics are configurable by bucket, allowing thresholds to be customized.
+#
+#   The bucket name is specified by the "bucket" parameter.
+#
+#   Special name "_all" will evaluate the configured metrics and thresholds for 
+#   all buckets
+data: 
+  - bucket: _all
     metrics:
-    - metric: status
-      description: node health
-      crit: healthy
-      op: "!="
     - metric: cmd_get
       description: gets per second
       warn: 5000
@@ -82,10 +117,6 @@ buckets:
       description: cache misses per second
       warn: 100 
       crit: 500
-    - metric: curr_items
-      description: item count
-      warn: 30000000
-      crit: 40000000
     - metric: couch_docs_fragmentation
       description: percent data fragmentation 
       warn: 35 
@@ -157,16 +188,13 @@ buckets:
       crit: 1024
       op: "<"
 
+# Query service
 query:
   metrics:
     - metric: request.active.count
       description: active N1QL requests
       warn: 750 
       crit: 1500
-    - metric: request_rate.mean.rate
-      description:
-      warn: 1000
-      crit: 2000
     - metric: request_timer.75%
       description:
       warn: 0.1 
@@ -192,8 +220,11 @@ query:
       warn: 0.1 
       crit: 0.15 
 
+
 #
-# Python Logging
+#
+# PYTHON LOGGING
+#
 #
 logging:
   version: 1

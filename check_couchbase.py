@@ -35,6 +35,8 @@ parser = ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
 parser.add_argument("-c", "--config", required=True, dest="config_file", action="store", help="Path to the check_couchbase YAML file")
 parser.add_argument("-d", "--dump-services",  dest="dump_services", action="store_true", help="Print Nagios service descriptions and exit")
 parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
+parser.add_argument("-C", "--couchbase-host",  dest="couchbase_host", action="store", help="Override the configured Couchbase host")
+parser.add_argument("-N", "--nagios-host",  dest="nagios_host", action="store", help="Override the configured Nagios host")
 parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="Enable debug logging to console")
 args = parser.parse_args()
 
@@ -50,6 +52,12 @@ if args.dump_services:
 
 if args.no_metrics:
     config["send_metrics"] = False
+
+if args.couchbase_host:
+    config["couchbase_host"] = args.couchbase_host
+
+if args.nagios_host:
+    config["nagios_host"] = args.nagios_host
 
 
 # Adds the ANSI bold escape sequence
@@ -304,20 +312,6 @@ def validate_config():
     config.setdefault("service_include_label", False)
     config.setdefault("send_metrics", True)
     config.setdefault("dump_services", False)
-
-    # For docker environments
-    env_couchbase_host = os.getenv("COUCHBASE_HOST", None)
-    env_nagios_host = os.getenv("NAGIOS_HOST", None)
-    env_send_metrics = os.getenv("SEND_METRICS", None)
-
-    if env_couchbase_host:
-        config["couchbase_host"] = env_couchbase_host
-
-    if env_nagios_host:
-        config["nagios_host"] = env_nagios_host
-
-    if env_send_metrics:
-        config["send_metrics"] = False
 
     # Unrecoverable errors
     for item in ["couchbase_user", "couchbase_password", "nagios_host", "nsca_password"]:

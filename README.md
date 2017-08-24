@@ -44,6 +44,10 @@ optional arguments:
                         Path to the check_couchbase YAML file
   -d, --dump-services   Print Nagios service descriptions and exit
   -n, --no-metrics      Do not send metrics to Nagios
+  -C COUCHBASE_HOST, --couchbase-host COUCHBASE_HOST
+                        Override the configured Couchbase host
+  -N NAGIOS_HOST, --nagios-host NAGIOS_HOST
+                        Override the configured Nagios host
   -v, --verbose         Enable debug logging to console
 ```
 

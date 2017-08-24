@@ -112,6 +112,11 @@ def couchbase_request(uri, service=None):
         raise
 
 
+# Averages multiple metric samples to smooth out values
+def avg(samples):
+    return sum(samples, 0) / len(samples)
+
+
 # For dynamic comparisons
 # Thanks to https://stackoverflow.com/a/18591880
 def compare(inp, relate, cut):
@@ -161,20 +166,29 @@ def eval_status(value, critical, warning, op):
 
 # Evalutes data service stats and sends check results
 def process_data_stats(bucket, metrics, host, cluster_name):
-    stats = couchbase_request("/pools/default/buckets/{0}/stats".format(bucket))
-    samples = stats["op"]["samples"]
+    s = couchbase_request("/pools/default/buckets/{0}/stats".format(bucket))
+    stats = s["op"]["samples"]
 
     for m in metrics:
         m.setdefault("crit", None)
         m.setdefault("warn", None)
         m.setdefault("op", ">=")
 
-        if validate_metric(m, samples) is False:
-            continue
+        if m["metric"] == "quota_utilization":
+            value = avg(stats["mem_used"]) / (avg(stats["ep_mem_high_wat"]) * 1.0) * 100
+        elif m["metric"] == "metadata_utilization":
+            value = avg(stats["ep_meta_data_memory"]) / (avg(stats["ep_mem_high_wat"]) * 1.0) * 100
+        elif m["metric"] == "disk_write_queue":
+            value = avg(stats["ep_queue_size"]) + avg(stats["ep_flusher_todo"])
+        elif m["metric"] == "total_ops":
+            value = 0
+            for op in ["cmd_get", "cmd_set", "incr_misses", "incr_hits", "decr_misses", "decr_hits", "delete_misses", "delete_hits"]:
+                value += avg(stats[op])
+        else:
+            if validate_metric(m, stats) is False:
+                continue
 
-        # Couchbase returns samples for the last 60 seconds.
-        # Average them to smooth out values
-        value = sum(samples[m["metric"]], 0) / len(samples[m["metric"]])
+            value = avg(stats[m["metric"]])
 
         service = build_service_description(m["description"], cluster_name, bucket)
         status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
@@ -193,12 +207,21 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
 
     for task in tasks:
         if task["type"] == "xdcr" and task["source"] == bucket:
-            if task["status"] == "running":
-                for m in metrics:
-                    m.setdefault("crit", None)
-                    m.setdefault("warn", None)
-                    m.setdefault("op", ">=")
+            for m in metrics:
+                m.setdefault("crit", None)
+                m.setdefault("warn", None)
+                m.setdefault("op", ">=")
 
+                label = "xdcr {0}/{1}".format(task["id"].split("/")[1], task["id"].split("/")[2])
+
+                if m["metric"] == "status":
+                    value = task["status"]
+                    service = build_service_description(m["description"], cluster_name, label)
+                    status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
+                    message = "{0} - {1}: {2}".format(status_text, m["metric"], str(value))
+
+                    send(host, service, status, message)
+                elif task["status"] in ["running", "paused"]:
                     uri = "/pools/default/buckets/{0}/stats/{1}".format(bucket, quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe=""))
                     stats = couchbase_request(uri)
 
@@ -208,8 +231,9 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
                                 log.error("Invalid XDCR metric: {0}".format(m["metric"]))
                                 return
 
-                            value = sum(stats["nodeStats"][node], 0) / len(stats["nodeStats"][node])
-                            service = build_service_description(m["description"], cluster_name, "xdcr")
+                            value = avg(stats["nodeStats"][node])
+
+                            service = build_service_description(m["description"], cluster_name, label)
                             status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
                             message = "{0} - {1}: {2}".format(status_text, m["metric"], str(value))
 
@@ -223,17 +247,17 @@ def process_query_stats(host, cluster_name):
         return
 
     metrics = config["query"]
-    samples = couchbase_request("/admin/stats", "query")
+    stats = couchbase_request("/admin/stats", "query")
 
     for m in metrics:
         m.setdefault("crit", None)
         m.setdefault("warn", None)
         m.setdefault("op", ">=")
 
-        if validate_metric(m, samples) is False:
+        if validate_metric(m, stats) is False:
             continue
 
-        value = samples[m["metric"]]
+        value = stats[m["metric"]]
 
         service = build_service_description(m["description"], cluster_name, "query")
         status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
@@ -242,6 +266,7 @@ def process_query_stats(host, cluster_name):
         send(host, service, status, message)
 
 
+# Evaluates node stats and sends check results
 def process_node_stats(stats, host, cluster_name):
     metrics = config["node"]
 
@@ -317,21 +342,21 @@ def validate_config():
 # Validates metric config
 def validate_metric(metric, samples):
     if "metric" not in metric or metric["metric"] is None:
-        log.info("Skipped: metric name not set")
+        log.warning("Skipped: metric name not set")
         return False
 
     name = metric["metric"]
 
     if name not in samples:
-        log.info("Skipped: metric does not exist: {0}".format(name))
+        log.warning("Skipped: metric does not exist: {0}".format(name))
         return False
 
     if "description" not in metric or metric["description"] is None:
-        log.info("Skipped: service description is not set for metric: {0}".format(name))
+        log.warning("Skipped: service description is not set for metric: {0}".format(name))
         return False
 
     if metric["op"] not in [">", ">=", "=", "<=", "<"]:
-        log.info("Skipped: Invalid operator: {0}, for metric: {1}".format(op, name))
+        log.warning("Skipped: Invalid operator: {0}, for metric: {1}".format(op, name))
         return False
 
 

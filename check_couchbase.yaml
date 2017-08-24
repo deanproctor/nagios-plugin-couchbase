@@ -106,9 +106,31 @@ service_include_label: True
 #
 #  Metric names are documented here:
 #  https://github.com/couchbase/ep-engine/blob/master/docs/stats.org
+#
+#  The following calculated metrics have been added:
+#    quota_utilization: mem_used / ep_mem_high_wat
+#    metadata_utilization: ep_meta_data_memory / ep_mem_high_wat
+#    disk_write_queue: ep_queue_size + ep_flusher_todo
+#    total_ops: cmd_get + cmd_set + incr_misses + incr_hits + decr_misses + decr_hits + delete_misses + delete_hits
 data:
   - bucket: _all
     metrics:
+    - metric: quota_utilization
+      description: percent bucket quota used
+      warn: 80
+      crit: 90 
+    - metric: metadata_utilization
+      description: percent bucket quota used by metadata
+      warn: 10
+      crit: 20
+    - metric: disk_write_queue
+      description: items in disk write queue
+      warn: 10000
+      crit: 50000
+    - metric: total_ops
+      description: total ops per second
+      warn: 10000
+      crit: 20000
     - metric: cmd_get
       description: gets per second
       warn: 5000
@@ -137,10 +159,6 @@ data:
       description: client connections
       warn: 500
       crit: 1000  # Backoffs are sent at 10,0000 
-    - metric: ep_diskqueue_items
-      description: items in disk write queue
-      warn: 10000
-      crit: 50000
     - metric: ep_dcp_replica_items_remaining
       description: items in internal replication queue
       warn: 2500
@@ -225,6 +243,11 @@ query:
 #  All metric names documented here:
 #  https://developer.couchbase.com/documentation/server/current/rest-api/rest-xdcr-statistics.html
 xdcr:
+  - metric: status
+    description: replication status
+    warn: "paused"
+    crit: "notRunning"
+    op: "="
   - metric: changes_left
     description: documents pending replication
     warn: 2500

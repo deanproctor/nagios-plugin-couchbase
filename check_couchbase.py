@@ -70,15 +70,19 @@ def send(host, service, status, message):
         return
 
     if not os.path.exists(config["nsca_path"]):
-        log.error("Path to send_nsca is invalid: {0}".format(config["nsca_path"]))
+        print("Path to send_nsca is invalid: {0}".format(config["nsca_path"]))
         exit(2)
 
     cmd = "{0} -H {1} -p {2}".format(config["nsca_path"], str(config["nagios_host"]), str(config["nsca_port"]))
 
     pipe = Popen(cmd, shell=True, stdin=PIPE)
-    pipe.communicate(line.encode())
+    outs, errs = pipe.communicate(line.encode())
     pipe.stdin.close()
     pipe.wait()
+
+    if pipe.returncode:
+        print("Failed to send stats to Nagios, check nagios and nsca configuration.")
+        exit(2)
 
 
 # Executes a Couchbase REST API request and returns the output
@@ -103,13 +107,13 @@ def couchbase_request(uri, service=None):
         response = json.loads(f.text)
 
         if("permissions" in response):
-            log.error("{0}: {1}".format(response["message"], response["permissions"]))
+            print("{0}: {1}".format(response["message"], response["permissions"]))
             exit(2)
 
         return response
     except:
-        log.error("Failed to complete request to Couchbase: {0}, verify couchbase_user and couchbase_password settings".format(url))
-        raise
+        print("Failed to complete request to Couchbase: {0}, verify couchbase_user and couchbase_password settings".format(url))
+        exit(2)
 
 
 # Averages multiple metric samples to smooth out values
@@ -318,24 +322,24 @@ def validate_config():
     # Unrecoverable errors
     for item in ["couchbase_user", "couchbase_password", "nagios_host", "nsca_password"]:
         if item not in config:
-            log.error("{0} is not set".format(item))
+            print("{0} is not set".format(item))
             exit(2)
 
     if "node" not in config:
-        log.error("Node metrics are required")
+        print("Node metrics are required")
         exit(2)
 
     if "data" not in config:
-        log.error("Data service metrics are required")
+        print("Data service metrics are required")
         exit(2)
 
     for item in config["data"]:
         if "bucket" not in item or item["bucket"] is None:
-            log.error("Bucket name is not set")
+            print("Bucket name is not set")
             exit(2)
 
         if "metrics" not in item or item["metrics"] is None:
-            log.error("Metrics are not set for bucket {0}".format(item["bucket"]))
+            print("Metrics are not set for bucket {0}".format(item["bucket"]))
             exit(2)
 
 

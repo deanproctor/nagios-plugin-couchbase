@@ -393,6 +393,7 @@ def main():
     if "n1ql" in services:
         process_query_stats(host, cluster_name)
 
+    print("OK - check_couchbase.py ran successfully")
     return 0
 
 if __name__ == "__main__":

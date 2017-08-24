@@ -9,7 +9,6 @@ See: https://developer.couchbase.com/documentation/server/current/rest-api/rest-
  * python-requests
  * PyYAML
  * nsca-ng
-
 """
 
 import json
@@ -84,7 +83,7 @@ def send(host, service, status, message):
     cmd = "{0} -H {1} -p {2}".format(config["nsca_path"], str(config["nagios_host"]), str(config["nsca_port"]))
 
     pipe = Popen(cmd, shell=True, stdin=PIPE)
-    outs, errs = pipe.communicate(line.encode())
+    pipe.communicate(line.encode())
     pipe.stdin.close()
     pipe.wait()
 

@@ -196,6 +196,7 @@ data:
       description: percent replica items in memory
       warn: 50
       crit: 15  # Should never be less than 15%
+      op: "<"
 
 # Query service
 #  All metric names documented here (under Vitals):

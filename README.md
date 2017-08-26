@@ -1,13 +1,46 @@
-Executes a series of passive checks against a Couchbase host
+# Nagios Couchbase Plugin
+A plugin to monitor the Couchbase REST APIs and forward events to Nagios.
 
-To run:
-Set your environment details and metric values in check_couchbase.yaml
+It is intended to be a standalone Nagios plugin as well as a reference for how to interact with the Couchbase REST APIs when building plugins for other systems.
 
-then
+## Requirements
+* Python requests module
+* PyYAML
+* send_nsca via the nsca or nsca-ng packages
 
-./check_couchbase.py -c check_couchbase.yaml 
+## Configuration
+This plugin is configured to submit passive checks to Nagios via NSCA.  The set of metrics to monitor and thresholds for each metric are locally configured in the check_couchbase.yaml file.
 
-To debug locally without attempting to send data to nagios:
+### Minimum configuration
+Make sure the following properties match your environment:
+* couchbase_host
+* couchbase_user
+* couchbase_password
+* nagios_host
+* nsca_port
+* nsca_password
+* nsca_path
 
-SEND_METRICS=false ./check_couchbase.py -v -c check_couchbase.yaml
+### Nagios services
+You must have services configured in Nagios in order for the passive checks to be accepted.  The plugin allows you to customize the service description to match your Nagios configuration.  Service descriptions are built in the following format:
 
+{prefix} {cluster name} {label} - {metric description}
+
+The configuration file documents how the service description is built and how to customize it.
+
+### Couchbase metrics
+This plugin comes pre-configured with a set of best-practice metrics.  It will be necessary to update the metric thresholds to reflect your Couchbase environment.
+
+## Usage
+``` bash
+usage: check_couchbase.py [options] -c CONFIG_FILE
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -c CONFIG_FILE, --config CONFIG_FILE
+                        Path to the check_couchbase YAML file
+  -n, --no-metrics      Do not send metrics to Nagios
+  -v, --verbose         Enable debug logging to console
+```
+
+This script should be executed via cron or via a Nagios NRPE check.

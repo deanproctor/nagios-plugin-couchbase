@@ -21,6 +21,8 @@ Make sure the following properties match your environment:
 * nsca_password
 * nsca_path
 
+Note that the user executing this script must have read access to /etc/send_nsca.cfg.
+
 ### Nagios services
 You must have services configured in Nagios in order for the passive check results to be accepted.  The plugin allows you to customize the service description to match your Nagios configuration.  
 

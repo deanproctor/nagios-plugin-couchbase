@@ -8,7 +8,7 @@ See: https://developer.couchbase.com/documentation/server/current/rest-api/rest-
 
  * python-requests
  * PyYAML
- * nsca-ng
+ * nsca
 """
 
 import json
@@ -185,9 +185,9 @@ def process_data_stats(bucket, metrics, host, cluster_name):
         m.setdefault("warn", None)
         m.setdefault("op", ">=")
 
-        if m["metric"] == "quota_utilization":
+        if m["metric"] == "percent_quota_utilization":
             value = avg(stats["mem_used"]) / (avg(stats["ep_mem_high_wat"]) * 1.0) * 100
-        elif m["metric"] == "metadata_utilization":
+        elif m["metric"] == "percent_metadata_utilization":
             value = avg(stats["ep_meta_data_memory"]) / (avg(stats["ep_mem_high_wat"]) * 1.0) * 100
         elif m["metric"] == "disk_write_queue":
             value = avg(stats["ep_queue_size"]) + avg(stats["ep_flusher_todo"])
@@ -203,21 +203,21 @@ def process_data_stats(bucket, metrics, host, cluster_name):
 
         service = build_service_description(m["description"], cluster_name, bucket)
         status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
-        message = "{0} - {1}: {2}".format(status_text, m["metric"], str(value))
+        message = "{0} - {1}: {2}".format(status_text, m["metric"], str(round(value, 2)).rstrip("0").rstrip("."))
 
         send(host, service, status, message)
 
 
 # Evaluates XDCR stats and sends check results
-def process_xdcr_stats(bucket, tasks, host, cluster_name):
-    if "xdcr" not in config:
-        log.warning("XDCR is running but no metrics are configured")
-        return
-
-    metrics = config["xdcr"]
-
+def process_xdcr_stats(tasks, host, cluster_name):
     for task in tasks:
-        if task["type"] == "xdcr" and task["source"] == bucket:
+        if task["type"] == "xdcr":
+            if "xdcr" not in config:
+                log.warning("XDCR is running but no metrics are configured")
+                return
+
+            metrics = config["xdcr"]
+
             for m in metrics:
                 m.setdefault("crit", None)
                 m.setdefault("warn", None)
@@ -229,11 +229,11 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
                     value = task["status"]
                     service = build_service_description(m["description"], cluster_name, label)
                     status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
-                    message = "{0} - {1}: {2}".format(status_text, m["metric"], str(value))
+                    message = "{0} - {1}: {2}".format(status_text, m["metric"], value)
 
                     send(host, service, status, message)
                 elif task["status"] in ["running", "paused"]:
-                    uri = "/pools/default/buckets/{0}/stats/{1}".format(bucket, quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe=""))
+                    uri = "/pools/default/buckets/{0}/stats/{1}".format(task["source"], quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe=""))
                     stats = couchbase_request(uri)
 
                     for node in stats["nodeStats"]:
@@ -246,7 +246,7 @@ def process_xdcr_stats(bucket, tasks, host, cluster_name):
 
                             service = build_service_description(m["description"], cluster_name, label)
                             status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
-                            message = "{0} - {1}: {2}".format(status_text, m["metric"], str(value))
+                            message = "{0} - {1}: {2}".format(status_text, m["metric"], str(round(value, 2)).rstrip("0").rstrip("."))
 
                             send(host, service, status, message)
 
@@ -377,15 +377,15 @@ def main():
             process_node_stats(node, host, cluster_name)
 
     if "kv" in services:
+        process_xdcr_stats(tasks, host, cluster_name)
+
         for item in config["data"]:
             # _all is a special case where we process stats for all buckets
             if item["bucket"] == "_all":
                 for bucket in couchbase_request("/pools/default/buckets?skipMap=true"):
                     process_data_stats(bucket["name"], item["metrics"], host, cluster_name)
-                    process_xdcr_stats(bucket["name"], tasks, host, cluster_name)
             else:
                 process_data_stats(item["bucket"], item["metrics"], tasks, host, cluster_name)
-                process_xdcr_stats(item["bucket"], tasks, host, cluster_name)
 
     if "n1ql" in services:
         process_query_stats(host, cluster_name)

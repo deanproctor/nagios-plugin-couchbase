@@ -44,11 +44,12 @@ nagios_host: 10.0.2.2
 nsca_port: 5668
 
 # NSCA password as set on the Nagios server
-# Typicaly found in nsca.cfg or nsca-ng.cfg
+# Typicaly found in nsca.cfg
 nsca_password: secret
 
 # Path to the send_nsca binary
-nsca_path: /sbin/send_nsca
+# Note that the user running this script must be able to read /etc/send_nsca.cfg
+nsca_path: /usr/sbin/send_nsca
 
 
 #
@@ -108,18 +109,18 @@ service_include_label: True
 #  https://github.com/couchbase/ep-engine/blob/master/docs/stats.org
 #
 #  The following calculated metrics have been added:
-#    quota_utilization: mem_used / ep_mem_high_wat
-#    metadata_utilization: ep_meta_data_memory / ep_mem_high_wat
+#    percent_quota_utilization: mem_used / ep_mem_high_wat
+#    percent_metadata_utilization: ep_meta_data_memory / ep_mem_high_wat
 #    disk_write_queue: ep_queue_size + ep_flusher_todo
 #    total_ops: cmd_get + cmd_set + incr_misses + incr_hits + decr_misses + decr_hits + delete_misses + delete_hits
 data:
   - bucket: _all
     metrics:
-    - metric: quota_utilization
+    - metric: percent_quota_utilization
       description: percent bucket quota used
       warn: 80
       crit: 90 
-    - metric: metadata_utilization
+    - metric: percent_metadata_utilization
       description: percent bucket quota used by metadata
       warn: 10
       crit: 20

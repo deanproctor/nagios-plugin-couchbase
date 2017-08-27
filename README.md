@@ -53,4 +53,4 @@ optional arguments:
   -v, --verbose         Enable debug logging to console
 ```
 
-This script should be executed via cron or via a Nagios NRPE check.
+This script should be executed via cron or a Nagios NRPE check.

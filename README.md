@@ -16,9 +16,8 @@ Make sure the following properties match your environment:
 * couchbase_host
 * couchbase_user
 * couchbase_password
-* nagios_host
-* nsca_port
-* nsca_password
+* monitor_host
+* monitor_port
 * nsca_path
 
 Note that the user executing this script must have read access to /etc/send_nsca.cfg.

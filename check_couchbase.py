@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Collects statistics from the Couchbase REST API.
@@ -412,4 +412,4 @@ def main():
     return 0
 
 if __name__ == "__main__":
-        main()
+    main()

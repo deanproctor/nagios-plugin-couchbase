@@ -34,18 +34,30 @@ couchbase_ssl: True
 
 #
 #
-# NAGIOS CONNECTION
+# MONITOR CONNECTION
 #
 #
-# IP address or hostname of the Nagios server
-nagios_host: 10.0.2.2
 
-# NSCA service port
-nsca_port: 5668
+# The type of monitoring system in use
+#  Options are:
+#   nagios
+monitor_type: nagios
 
-# NSCA password as set on the Nagios server
-# Typicaly found in nsca.cfg
-nsca_password: secret
+# IP address or hostname of the monitor server
+monitor_host: 10.0.2.2
+
+# Monitor service port
+#  If Nagios, defaults are:
+#   nsca: 5667
+#   nsca-ng: 5668
+monitor_port: 5668
+
+
+#
+#
+# NAGIOS CONFIGURATION 
+#
+#
 
 # Path to the send_nsca binary
 # Note that the user running this script must be able to read /etc/send_nsca.cfg
@@ -57,11 +69,11 @@ nsca_path: /usr/sbin/send_nsca
 # SERVICE NAME
 #
 #
-#  These settings define how the Nagios service name should be constructed.
+#  These settings define how the service name should be constructed.
 #  The service name format will be:
 #   {prefix} {cluster name} {label} - {metric description}
 
-# Nagios service prefix
+# Service prefix
 service_prefix: Couchbase
 
 # Include the cluster name in the service description
@@ -83,15 +95,15 @@ service_include_label: True
 #  Metrics have 5 possible values:
 #  Required:
 #    metric: the Couchbase REST API metric to check
-#    description: used to construct the Nagios service name
+#    description: used to construct the service name
 #  Optional:
 #    warn: the warning alert threshold
 #    crit: the critical alert threshold
 #    op: operator used to compare the current value against the thresholds
 #
-#  The statuses sent to Nagios are defined by the configured thresholds along
+#  The statuses sent to the monitor are defined by the configured thresholds along
 #  with an implicit "OK".  Not specifying thresholds will result in "OK"
-#  always being sent to Nagios.
+#  always being sent to the monitor.
 #
 #  "op" allows you to define the operator used when evaluating thresholds
 #  againt the current value.  Options are: ">", ">=", "=", "<=", "<"

@@ -37,7 +37,7 @@ The --dump-services flag can be used to output the Nagios service descriptions t
 This plugin comes pre-configured with a set of best-practice metrics.  It will be necessary to update the metric thresholds to reflect your Couchbase environment.
 
 ## Usage
-``` bash
+``` 
 usage: check_couchbase.py [options] -c CONFIG_FILE
 
 optional arguments:
@@ -45,13 +45,15 @@ optional arguments:
   -a, --all-nodes       Return metrics for all nodes
   -c CONFIG_FILE, --config CONFIG_FILE
                         Path to the check_couchbase YAML file
-  -d, --dump-services   Print Nagios service descriptions and exit
-  -n, --no-metrics      Do not send metrics to Nagios
+  -d, --dump-services   Print service descriptions and exit
+  -n, --no-metrics      Do not send metrics to the monitoring host
+  -v, --verbose         Enable debug logging to console
   -C COUCHBASE_HOST, --couchbase-host COUCHBASE_HOST
                         Override the configured Couchbase host
-  -N NAGIOS_HOST, --nagios-host NAGIOS_HOST
-                        Override the configured Nagios host
-  -v, --verbose         Enable debug logging to console
+  -H MONITOR_HOST, --monitor-host MONITOR_HOST
+                        Override the configured monitoring host
+  -M MONITOR_TYPE, --monitor-type MONITOR_TYPE
+                        Override the type of the target monitoring system
 ```
 
 This script should be executed via cron or a Nagios NRPE check.

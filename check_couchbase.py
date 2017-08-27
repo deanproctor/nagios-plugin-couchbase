@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 """
 Collects statistics from the Couchbase REST API.
@@ -247,6 +247,7 @@ def process_xdcr_stats(tasks, host, cluster_name):
                 m.setdefault("warn", None)
                 m.setdefault("op", ">=")
 
+                # task["id"] looks like this: {GUID}/{source_bucket}/{destination_bucket}
                 label = "xdcr {0}/{1}".format(task["id"].split("/")[1], task["id"].split("/")[2])
 
                 if m["metric"] == "status":
@@ -257,11 +258,14 @@ def process_xdcr_stats(tasks, host, cluster_name):
 
                     send(host, service, status, message)
                 elif task["status"] in ["running", "paused"]:
-                    replication = requests.utils.quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe="")
-                    uri = "/pools/default/buckets/{0}/stats/{1}".format(task["source"], replication)
+                    # REST API requires the destination endpoint to be URL encoded.
+                    destination = requests.utils.quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe="")
+
+                    uri = "/pools/default/buckets/{0}/stats/{1}".format(task["source"], destination)
                     stats = couchbase_request(uri)
 
                     for node in stats["nodeStats"]:
+                        # node is formatted as host:port
                         if host == node.split(":")[0]:
                             if len(stats["nodeStats"][node]) == 0:
                                 log.error("Invalid XDCR metric: {0}".format(m["metric"]))
@@ -381,6 +385,7 @@ def main():
     tasks = couchbase_request("/pools/default/tasks")
     pools_default = couchbase_request("/pools/default")
 
+    # clusterName is optional
     if "clusterName" in pools_default:
         cluster_name = pools_default["clusterName"]
     else:
@@ -389,6 +394,7 @@ def main():
     nodes = pools_default["nodes"]
     for node in nodes:
         if "thisNode" in node:
+            # node is formatted a hostname:port
             host = node["hostname"].split(":")[0]
             services = node["services"]
 

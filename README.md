@@ -1,5 +1,5 @@
-# Nagios Couchbase Plugin
-A plugin to monitor the Couchbase REST APIs and forward events to Nagios.
+# Couchbase Nagios Plugin
+A plugin to monitor Couchbase REST APIs and forward metrics to Nagios.
 
 It is intended to be a standalone Nagios plugin as well as a reference for how to interact with the Couchbase REST APIs when building plugins for other systems.
 

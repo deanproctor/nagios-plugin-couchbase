@@ -52,7 +52,7 @@ optional arguments:
   -H MONITOR_HOST, --monitor-host MONITOR_HOST
                         Override the configured monitoring host
   -M MONITOR_TYPE, --monitor-type MONITOR_TYPE
-                        Override the type of the target monitoring system
+                        Override the configured monitoring system type
 ```
 
 This script should be executed via cron or a Nagios NRPE check.

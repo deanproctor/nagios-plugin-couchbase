@@ -26,7 +26,7 @@ import yaml
 
 # Basic setup
 parser = argparse.ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
-parser.add_argument("-a", "--all-nodes", dest="all_nodes", action="store_true", help="Return stats for all nodes")
+parser.add_argument("-a", "--all-nodes", dest="all_nodes", action="store_true", help="Return metrics for all nodes")
 parser.add_argument("-c", "--config", required=True, dest="config_file", action="store", help="Path to the check_couchbase YAML file")
 parser.add_argument("-d", "--dump-services",  dest="dump_services", action="store_true", help="Print Nagios service descriptions and exit")
 parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
@@ -103,7 +103,7 @@ def send(host, service, status, message):
         pipe.wait()
 
         if pipe.returncode:
-            print("Failed to send stats to Nagios. {0}".format(err.decode().rstrip()))
+            print("Failed to send metrics to Nagios. {0}".format(err.decode().rstrip()))
             sys.exit(2)
     except:
         raise

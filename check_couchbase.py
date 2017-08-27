@@ -8,29 +8,24 @@ See: https://developer.couchbase.com/documentation/server/current/rest-api/rest-
 
  * python-requests
  * PyYAML
- * nsca
+ * nsca-client or nsca-ng-client
 """
 
+import argparse
 import json
 import logging as log
 import logging.config
+import numbers
 import operator
 import os
-import ssl
-import yaml
 import requests
-
-from argparse import ArgumentParser
-from base64 import b64encode
-from numbers import Number
-from requests.utils import quote
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-from subprocess import Popen, PIPE
-from sys import exit, stderr
+import subprocess
+import sys
+import yaml
 
 
 # Basic setup
-parser = ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
+parser = argparse.ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
 parser.add_argument("-c", "--config", required=True, dest="config_file", action="store", help="Path to the check_couchbase YAML file")
 parser.add_argument("-d", "--dump-services",  dest="dump_services", action="store_true", help="Print Nagios service descriptions and exit")
 parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
@@ -39,24 +34,39 @@ parser.add_argument("-N", "--nagios-host",  dest="nagios_host", action="store", 
 parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="Enable debug logging to console")
 args = parser.parse_args()
 
-config = yaml.load(open(args.config_file).read())
 
-if args.verbose:
-    config["logging"]["handlers"]["console"]["level"] = "DEBUG"
+# Attempts to load the configuration file and apply argument overrides
+def load_config():
+    global config
 
-logging.config.dictConfig(config["logging"])
+    try:
+        f = open(args.config_file).read()
+        config = yaml.load(f)
+    except IOError:
+        print("Unable to read config file {0}".format(args.config_file))
+        sys.exit(2)
+    except (yaml.reader.ReaderError, yaml.parser.ParserError):
+        print("Invalid YAML syntax in config file {0}".format(args.config_file))
+        sys.exit(2)
+    except:
+        raise
 
-if args.dump_services:
-    config["dump_services"] = True
+    if args.dump_services:
+        config["dump_services"] = True
 
-if args.no_metrics:
-    config["send_metrics"] = False
+    if args.no_metrics:
+        config["send_metrics"] = False
 
-if args.couchbase_host:
-    config["couchbase_host"] = args.couchbase_host
+    if args.couchbase_host:
+        config["couchbase_host"] = args.couchbase_host
 
-if args.nagios_host:
-    config["nagios_host"] = args.nagios_host
+    if args.nagios_host:
+        config["nagios_host"] = args.nagios_host
+
+    if args.verbose:
+        config["logging"]["handlers"]["console"]["level"] = "DEBUG"
+
+    logging.config.dictConfig(config["logging"])
 
 
 # Adds the ANSI bold escape sequence
@@ -78,18 +88,21 @@ def send(host, service, status, message):
 
     if not os.path.exists(config["nsca_path"]):
         print("Path to send_nsca is invalid: {0}".format(config["nsca_path"]))
-        exit(2)
+        sys.exit(2)
 
     cmd = "{0} -H {1} -p {2}".format(config["nsca_path"], str(config["nagios_host"]), str(config["nsca_port"]))
 
-    pipe = Popen(cmd, shell=True, stdin=PIPE)
-    pipe.communicate(line.encode())
-    pipe.stdin.close()
-    pipe.wait()
+    try:
+        pipe = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = pipe.communicate(line.encode())
+        pipe.stdin.close()
+        pipe.wait()
 
-    if pipe.returncode:
-        print("Failed to send stats to Nagios, check nagios and nsca configuration.")
-        exit(2)
+        if pipe.returncode:
+            print("Failed to send stats to Nagios. {0}".format(err.decode().rstrip()))
+            sys.exit(2)
+    except:
+        raise
 
 
 # Executes a Couchbase REST API request and returns the output
@@ -109,18 +122,23 @@ def couchbase_request(uri, service=None):
     url = "{0}://{1}:{2}{3}".format(protocol, host, str(port), uri)
 
     try:
-        requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
         f = requests.get(url, auth=(config["couchbase_user"], config["couchbase_password"]), verify=False)
+
+        if f.status_code == 500:
+            raise
+
         response = json.loads(f.text)
 
+        # The configured user has insufficient permissions for the REST API
         if("permissions" in response):
             print("{0}: {1}".format(response["message"], response["permissions"]))
-            exit(2)
+            sys.exit(2)
 
         return response
     except:
         print("Failed to complete request to Couchbase: {0}, verify couchbase_user and couchbase_password settings".format(url))
-        exit(2)
+        sys.exit(2)
 
 
 # Averages multiple metric samples to smooth out values
@@ -163,11 +181,11 @@ def build_service_description(description, cluster_name, label):
 
 # Determines metric status based on value and thresholds
 def eval_status(value, critical, warning, op):
-    if isinstance(critical, Number) and compare(value, op, critical):
+    if isinstance(critical, numbers.Number) and compare(value, op, critical):
         return 2, "CRITICAL"
     elif isinstance(critical, str) and compare(value, op, critical):
         return 2, "CRITICAL"
-    elif isinstance(warning, Number) and compare(value, op, warning):
+    elif isinstance(warning, numbers.Number) and compare(value, op, warning):
         return 1, "WARNING"
     elif isinstance(warning, str) and compare(value, op, warning):
         return 1, "WARNING"
@@ -233,7 +251,8 @@ def process_xdcr_stats(tasks, host, cluster_name):
 
                     send(host, service, status, message)
                 elif task["status"] in ["running", "paused"]:
-                    uri = "/pools/default/buckets/{0}/stats/{1}".format(task["source"], quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe=""))
+                    replication = requests.utils.quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe="")
+                    uri = "/pools/default/buckets/{0}/stats/{1}".format(task["source"], replication)
                     stats = couchbase_request(uri)
 
                     for node in stats["nodeStats"]:
@@ -313,27 +332,19 @@ def validate_config():
     config.setdefault("dump_services", False)
 
     # Unrecoverable errors
-    for item in ["couchbase_user", "couchbase_password", "nagios_host", "nsca_password"]:
+    for item in ["couchbase_user", "couchbase_password", "nagios_host", "nsca_password", "node", "data"]:
         if item not in config:
-            print("{0} is not set".format(item))
-            exit(2)
-
-    if "node" not in config:
-        print("Node metrics are required")
-        exit(2)
-
-    if "data" not in config:
-        print("Data service metrics are required")
-        exit(2)
+            print("{0} is not set in {1}".format(item, args.config_file))
+            sys.exit(2)
 
     for item in config["data"]:
         if "bucket" not in item or item["bucket"] is None:
-            print("Bucket name is not set")
-            exit(2)
+            print("Bucket name is not set in {0}".format(args.config_file))
+            sys.exit(2)
 
         if "metrics" not in item or item["metrics"] is None:
-            print("Metrics are not set for bucket {0}".format(item["bucket"]))
-            exit(2)
+            print("Metrics are not set for bucket {0} in {1}".format(item["bucket"], args.config_file))
+            sys.exit(2)
 
 
 # Validates metric config
@@ -353,11 +364,12 @@ def validate_metric(metric, samples):
         return False
 
     if metric["op"] not in [">", ">=", "=", "<=", "<"]:
-        log.warning("Skipped: Invalid operator: {0}, for metric: {1}".format(op, name))
+        log.warning("Skipped: Invalid operator: {0}, for metric: {1}".format(metric["op"], name))
         return False
 
 
 def main():
+    load_config()
     validate_config()
 
     tasks = couchbase_request("/pools/default/tasks")
@@ -390,7 +402,7 @@ def main():
     if "n1ql" in services:
         process_query_stats(host, cluster_name)
 
-    print("OK - check_couchbase.py ran successfully")
+    print("OK - check_couchbase ran successfully")
     return 0
 
 if __name__ == "__main__":

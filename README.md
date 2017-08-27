@@ -42,6 +42,7 @@ usage: check_couchbase.py [options] -c CONFIG_FILE
 
 optional arguments:
   -h, --help            show this help message and exit
+  -a, --all-nodes       Return stats for all nodes
   -c CONFIG_FILE, --config CONFIG_FILE
                         Path to the check_couchbase YAML file
   -d, --dump-services   Print Nagios service descriptions and exit

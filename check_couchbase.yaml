@@ -21,7 +21,7 @@ couchbase_query_port: 18093
 
 # Admin username
 #  < Couchbase 5: recommended to use the Read-Only Administrator
-#  >= Couchbase 5: admin user should only have the Data Monitoring role
+#  >= Couchbase 5: admin user should have the Data Monitoring role
 couchbase_user: readonly
 
 # Admin password
@@ -205,16 +205,16 @@ data:
 query:
   - metric: request_timer.75%
     description: 75th percentile query response time
-    warn: 100000000  # Nanoseconds
-    crit: 200000000  # Nanoseconds
+    warn: 100  # Milliseconds
+    crit: 200  # Milliseconds
   - metric: request_timer.95%
     description: 95th percentile query response time
-    warn: 200000000  # Nanoseconds
-    crit: 300000000  # Nanoseconds
+    warn: 200  # Milliseconds
+    crit: 300  # Milliseconds
   - metric: request_timer.99%
     description: 99th percentile query response time
-    warn: 400000000  # Nanoseconds
-    crit: 500000000  # Nanoseconds
+    warn: 400  # Milliseconds
+    crit: 500  # Milliseconds
   - metric: active_requests.count
     description: active N1QL requests
     warn: 1000

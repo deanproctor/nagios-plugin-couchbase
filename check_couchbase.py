@@ -26,6 +26,7 @@ import yaml
 
 # Basic setup
 parser = argparse.ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
+parser.add_argument("-a", "--all-nodes", dest="all_nodes", action="store_true", help="Return stats for all nodes")
 parser.add_argument("-c", "--config", required=True, dest="config_file", action="store", help="Path to the check_couchbase YAML file")
 parser.add_argument("-d", "--dump-services",  dest="dump_services", action="store_true", help="Print Nagios service descriptions and exit")
 parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to Nagios")
@@ -50,6 +51,9 @@ def load_config():
         sys.exit(2)
     except:
         raise
+
+    if args.all_nodes:
+        config["all_nodes"] = True
 
     if args.dump_services:
         config["dump_services"] = True
@@ -106,9 +110,7 @@ def send(host, service, status, message):
 
 
 # Executes a Couchbase REST API request and returns the output
-def couchbase_request(uri, service=None):
-    host = config["couchbase_host"]
-
+def couchbase_request(host, uri, service=None):
     if service == "query":
         port = config["couchbase_query_port"]
     else:
@@ -200,8 +202,8 @@ def eval_status(value, critical, warning, op):
 
 
 # Evalutes data service stats and sends check results
-def process_data_stats(bucket, metrics, host, cluster_name):
-    s = couchbase_request("/pools/default/buckets/{0}/stats".format(bucket))
+def process_data_stats(host, bucket, metrics, cluster_name):
+    s = couchbase_request(host, "/pools/default/buckets/{0}/stats".format(bucket))
     stats = s["op"]["samples"]
 
     for m in metrics:
@@ -233,7 +235,7 @@ def process_data_stats(bucket, metrics, host, cluster_name):
 
 
 # Evaluates XDCR stats and sends check results
-def process_xdcr_stats(tasks, host, cluster_name):
+def process_xdcr_stats(host, tasks, cluster_name):
     for task in tasks:
         if task["type"] == "xdcr":
             if "xdcr" not in config:
@@ -262,7 +264,7 @@ def process_xdcr_stats(tasks, host, cluster_name):
                     destination = requests.utils.quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe="")
 
                     uri = "/pools/default/buckets/{0}/stats/{1}".format(task["source"], destination)
-                    stats = couchbase_request(uri)
+                    stats = couchbase_request(host, uri)
 
                     for node in stats["nodeStats"]:
                         # node is formatted as host:port
@@ -287,7 +289,7 @@ def process_query_stats(host, cluster_name):
         return
 
     metrics = config["query"]
-    stats = couchbase_request("/admin/stats", "query")
+    stats = couchbase_request(host, "/admin/stats", "query")
 
     for m in metrics:
         m.setdefault("crit", None)
@@ -299,15 +301,19 @@ def process_query_stats(host, cluster_name):
 
         value = stats[m["metric"]]
 
+        # Convert nanoseconds to milliseconds
+        if m["metric"] in ["request_timer.75%", "request_timer.95%", "request_timer.99%"]:
+            value = value / 1000 / 1000
+
         service = build_service_description(m["description"], cluster_name, "query")
         status, status_text = eval_status(value, m["crit"], m["warn"], m["op"])
-        message = "{0} - {1}: {2}".format(status_text, m["metric"], str(value))
+        message = "{0} - {1}: {2}".format(status_text, m["metric"], str(round(value, 2)).rstrip("0").rstrip("."))
 
         send(host, service, status, message)
 
 
 # Evaluates node stats and sends check results
-def process_node_stats(stats, host, cluster_name):
+def process_node_stats(host, stats, cluster_name):
     metrics = config["node"]
 
     for m in metrics:
@@ -340,6 +346,7 @@ def validate_config():
     config.setdefault("service_include_label", False)
     config.setdefault("send_metrics", True)
     config.setdefault("dump_services", False)
+    config.setdefault("all_nodes", False)
 
     # Unrecoverable errors
     for item in ["couchbase_user", "couchbase_password", "nagios_host", "nsca_password", "node", "data"]:
@@ -382,8 +389,8 @@ def main():
     load_config()
     validate_config()
 
-    tasks = couchbase_request("/pools/default/tasks")
-    pools_default = couchbase_request("/pools/default")
+    tasks = couchbase_request(config["couchbase_host"], "/pools/default/tasks")
+    pools_default = couchbase_request(config["couchbase_host"], "/pools/default")
 
     # clusterName is optional
     if "clusterName" in pools_default:
@@ -393,26 +400,28 @@ def main():
 
     nodes = pools_default["nodes"]
     for node in nodes:
-        if "thisNode" in node:
-            # node is formatted a hostname:port
-            host = node["hostname"].split(":")[0]
-            services = node["services"]
+        if config["all_nodes"] is False and "thisNode" not in node:
+            continue
 
-            process_node_stats(node, host, cluster_name)
+        # node is formatted a hostname:port
+        host = node["hostname"].split(":")[0]
+        services = node["services"]
 
-    if "kv" in services:
-        process_xdcr_stats(tasks, host, cluster_name)
+        process_node_stats(host, node, cluster_name)
 
-        for item in config["data"]:
-            # _all is a special case where we process stats for all buckets
-            if item["bucket"] == "_all":
-                for bucket in couchbase_request("/pools/default/buckets?skipMap=true"):
-                    process_data_stats(bucket["name"], item["metrics"], host, cluster_name)
-            else:
-                process_data_stats(item["bucket"], item["metrics"], tasks, host, cluster_name)
+        if "kv" in services:
+            process_xdcr_stats(host, tasks, cluster_name)
 
-    if "n1ql" in services:
-        process_query_stats(host, cluster_name)
+            for item in config["data"]:
+                # _all is a special case where we process stats for all buckets
+                if item["bucket"] == "_all":
+                    for bucket in couchbase_request(host, "/pools/default/buckets?skipMap=true"):
+                        process_data_stats(host, bucket["name"], item["metrics"], cluster_name)
+                else:
+                    process_data_stats(host, item["bucket"], item["metrics"], tasks, cluster_name)
+
+        if "n1ql" in services:
+            process_query_stats(host, cluster_name)
 
     print("OK - check_couchbase ran successfully")
     return 0

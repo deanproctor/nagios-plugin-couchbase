@@ -125,20 +125,26 @@ def couchbase_request(uri, service=None):
         requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
         f = requests.get(url, auth=(config["couchbase_user"], config["couchbase_password"]), verify=False)
 
-        if f.status_code == 500:
-            raise
+        status = f.status_code
 
-        response = json.loads(f.text)
+        if f.text:
+            response = json.loads(f.text)
 
-        # The configured user has insufficient permissions for the REST API
-        if("permissions" in response):
-            print("{0}: {1}".format(response["message"], response["permissions"]))
-            sys.exit(2)
+        # We can provide a helpful error message on 403
+        if status == 403:
+            if "permissions" in response:
+                print("{0}: {1}".format(response["message"], response["permissions"]))
+
+        # Bail if status is anything but successful
+        if status != 200:
+            f.raise_for_status()
 
         return response
-    except:
-        print("Failed to complete request to Couchbase: {0}, verify couchbase_user and couchbase_password settings".format(url))
+    except requests.exceptions.HTTPError as e:
+        print("Failed to complete request to Couchbase: {0}, {1}".format(url, e))
         sys.exit(2)
+    except:
+        raise
 
 
 # Averages multiple metric samples to smooth out values

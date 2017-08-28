@@ -37,7 +37,7 @@ The --dump-services flag can be used to output the Nagios service descriptions t
 This plugin comes pre-configured with a set of best-practice metrics.  It will be necessary to update the metric thresholds to reflect your Couchbase environment.
 
 ## Usage
-``` bash
+``` text
 usage: check_couchbase.py [options] -c CONFIG_FILE
 
 optional arguments:

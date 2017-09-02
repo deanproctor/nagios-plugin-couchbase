@@ -7,21 +7,9 @@
 # IP address or hostname of the Couchbase node to monitor
 couchbase_host: localhost
 
-# Couchbase admin port
-#  Defaults:
-#  8091 (non-SSL)
-#  18091 (SSL)
-couchbase_admin_port: 18091
-
-# Couchbase query port
-#  Defaults:
-#  8093 (non-SSL)
-#  18093 (SSL)
-couchbase_query_port: 18093
-
 # Admin username
 #  < Couchbase 5: recommended to use the Read-Only Administrator
-#  >= Couchbase 5: admin user should have the Data Monitoring role
+#  >= Couchbase 5: admin user with the the Data Monitoring role
 couchbase_user: readonly
 
 # Admin password
@@ -29,7 +17,17 @@ couchbase_password: secret
 
 # Use SSL when talking to Couchbase
 # Must also use the correct port above
-couchbase_ssl: True
+couchbase_ssl: False
+
+# Override the default Couchbase ports
+#couchbase_admin_port: 8091
+#couchbase_admin_port_ssl: 18091
+
+#couchbase_query_port: 8093
+#couchbase_query_port_ssl: 18093
+
+#couchbase_fts_port: 8094
+#couchbase_fts_port: 18094
 
 
 #
@@ -41,16 +39,20 @@ couchbase_ssl: True
 # The type of monitoring system in use
 #  Options are:
 #   nagios
-monitor_type: nagios
+#   graphite
+monitor_type: graphite
 
 # IP address or hostname of the monitor server
-monitor_host: 10.0.2.2
+#monitor_host: 10.0.2.2
+monitor_host: 192.168.61.101
 
 # Monitor service port
 #  If Nagios, defaults are:
 #   nsca: 5667
 #   nsca-ng: 5668
-monitor_port: 5668
+#  If Graphite, default is:
+#    carbon: 2003
+monitor_port: 2003
 
 
 #
@@ -61,7 +63,7 @@ monitor_port: 5668
 
 # Path to the send_nsca binary
 # Note that the user running this script must be able to read /etc/send_nsca.cfg
-nsca_path: /usr/sbin/send_nsca
+nagios_nsca_path: /usr/sbin/send_nsca
 
 
 #
@@ -244,9 +246,34 @@ query:
     warn: 700
     crit: 750
 
+# Full Text Search (FTS) service
+#  All metric names documented here (under Vitals):
+#  https://developer.couchbase.com/documentation/server/current/rest-api/rest-fts-indexing.html#topic_hpd_2y4_1v__g-api-stats
+#
+#  Note that these metrics will be applied to each FTS index independently
+fts:
+  - metric: num_mutations_to_index
+    description: items in FTS indexer queue
+    warn: 2000
+    crit: 5000
+#  - metric: total_queries_slow  # commented until a rate metric is available
+#    description: FTS slow searches  # queries that take longer than 5 seconds 
+#    warn: 100
+#    crit: 1000
+#  - metric: total_queries_timeout
+#    description: FTS search timeouts # commented until a rate metric is available
+#    warn: 100
+#    crit: 1000
+#  - metric: total_queries_error # commented until a rate metric is available
+#    description: FTS search errors 
+#    warn: 100
+#    crit: 1000
+
 # XDCR
 #  All metric names documented here:
 #  https://developer.couchbase.com/documentation/server/current/rest-api/rest-xdcr-statistics.html
+#
+#  Note that these metrics will be applied to each XDCR replication independently
 xdcr:
   - metric: status
     description: replication status

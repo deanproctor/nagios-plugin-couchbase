@@ -6,6 +6,8 @@ It is intended to be a standalone Nagios plugin as well as a reference for how t
 ## Requirements
 * Python requests module
 * PyYAML
+
+For Nagios:
 * send_nsca via the nsca or nsca-ng packages
 
 ## Configuration

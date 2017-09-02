@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
 """
-Collects statistics from the Couchbase REST API.
-See: https://developer.couchbase.com/documentation/server/current/rest-api/rest-intro.html
+Collects statistics from the Couchbase REST API and forwards them to a 3rd party
+  monitoring server.
 
-#### Dependencies
-
+Dependencies
  * python-requests
  * PyYAML
 
@@ -21,14 +20,13 @@ import numbers
 import operator
 import os
 import requests
-import subprocess
 import sys
 import yaml
 
 
 # Basic setup
 parser = argparse.ArgumentParser(usage="%(prog)s [options] -c CONFIG_FILE")
-parser.add_argument("-a", "--all-nodes", dest="all_nodes", action="store_true", help="Return metrics for all nodes")
+parser.add_argument("-a", "--all-nodes", dest="all_nodes", action="store_true", help="Return metrics for all cluster nodes")
 parser.add_argument("-c", "--config", required=True, dest="config_file", action="store", help="Path to the check_couchbase YAML file")
 parser.add_argument("-d", "--dump-services",  dest="dump_services", action="store_true", help="Print service descriptions and exit")
 parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to the monitoring host")
@@ -37,6 +35,57 @@ parser.add_argument("-C", "--couchbase-host",  dest="couchbase_host", action="st
 parser.add_argument("-H", "--monitor-host",  dest="monitor_host", action="store", help="Override the configured monitoring host")
 parser.add_argument("-M", "--monitor-type", dest="monitor_type", action="store", help="Override the configured monitoring system type")
 args = parser.parse_args()
+
+
+def main():
+    config = load_config()
+    results = []
+
+    tasks = couchbase_request(config["couchbase_host"], config["couchbase_admin_port"], "/pools/default/tasks", config)
+    pools_default = couchbase_request(config["couchbase_host"], config["couchbase_admin_port"], "/pools/default", config)
+
+    nodes = pools_default["nodes"]
+
+    for node in nodes:
+        if config["all_nodes"] is False and "thisNode" not in node:
+            continue
+
+        # node is formatted a hostname:port
+        host = node["hostname"].split(":")[0]
+        services = node["services"]
+
+        results = process_node_stats(host, node, config, results)
+
+        if "kv" in services:
+            results = process_xdcr_stats(host, tasks, config, results)
+
+            for item in config["data"]:
+                # _all is a special case where we process stats for all buckets
+                if item["bucket"] == "_all":
+                    for bucket in couchbase_request(host, config["couchbase_admin_port"], "/pools/default/buckets?skipMap=true", config):
+                        results = process_data_stats(host, bucket["name"], item["metrics"], config, results)
+                else:
+                    results = process_data_stats(host, item["bucket"], item["metrics"], tasks, config, results)
+
+        if "n1ql" in services:
+            results = process_query_stats(host, config, results)
+
+        if "fts" in services:
+            results = process_fts_stats(host, config, results)
+
+    # clusterName is optional
+    if "clusterName" in pools_default:
+        cluster_name = pools_default["clusterName"]
+    else:
+        cluster_name = "Default"
+
+    if config["monitor_type"] == "nagios":
+        send_nagios(results, cluster_name, config)
+    elif config["monitor_type"] == "graphite":
+        send_graphite(results, cluster_name, config)
+    else:
+        print("Unknown monitor_type configured.  No metrics have been sent.")
+        sys.exit(2)
 
 
 # Attempts to load the configuration file and apply argument overrides
@@ -55,6 +104,21 @@ def load_config():
     except:
         raise
 
+    config.setdefault("couchbase_host", "localhost")
+    config.setdefault("couchbase_admin_port", 8091)
+    config.setdefault("couchbase_admin_port_ssl", 18091)
+    config.setdefault("couchbase_query_port", 8093)
+    config.setdefault("couchbase_query_port_ssl", 18093)
+    config.setdefault("couchbase_fts_port", 8094)
+    config.setdefault("couchbase_fts_port_ssl", 18094)
+    config.setdefault("couchbase_ssl", True)
+    config.setdefault("nagios_nsca_path", "/sbin/send_nsca")
+    config.setdefault("service_include_cluster_name", False)
+    config.setdefault("service_include_label", False)
+    config.setdefault("send_metrics", True)
+    config.setdefault("dump_services", False)
+    config.setdefault("all_nodes", False)
+
     if args.all_nodes:
         config["all_nodes"] = True
 
@@ -71,31 +135,17 @@ def load_config():
         config["monitor_host"] = args.monitor_host
 
     if args.monitor_type:
-        conifg["monitor_type"] - args.monitor_type
+        config["monitor_type"] = args.monitor_type
 
     if args.verbose:
         config["logging"]["handlers"]["console"]["level"] = "DEBUG"
 
     logging.config.dictConfig(config["logging"])
 
-    config = validate_config(config)
-
-    return config
-
-
-# Validates all config except metrics
-def validate_config(config):
-    # set defaults
-    config.setdefault("couchbase_host", "localhost")
-    config.setdefault("couchbase_admin_port", 18091)
-    config.setdefault("couchbase_query_port", 18093)
-    config.setdefault("couchbase_ssl", True)
-    config.setdefault("nsca_path", "/sbin/send_nsca")
-    config.setdefault("service_include_cluster_name", False)
-    config.setdefault("service_include_label", False)
-    config.setdefault("send_metrics", True)
-    config.setdefault("dump_services", False)
-    config.setdefault("all_nodes", False)
+    if config["couchbase_ssl"] is True:
+        config["couchbase_admin_port"] = config["couchbase_admin_port_ssl"]
+        config["couchbase_query_port"] = config["couchbase_query_port_ssl"]
+        config["couchbase_fts_port"] = config["couchbase_fts_port_ssl"]
 
     # Unrecoverable errors
     for item in ["couchbase_user", "couchbase_password", "monitor_type", "monitor_host", "monitor_port", "node", "data"]:
@@ -131,15 +181,6 @@ def validate_metric(metric, samples):
         log.warning("Skipped: service description is not set for metric: {0}".format(name))
         return False
 
-    if metric["op"] not in [">", ">=", "=", "<=", "<"]:
-        log.warning("Skipped: Invalid operator: {0}, for metric: {1}".format(metric["op"], name))
-        return False
-
-
-# Adds the ANSI bold escape sequence
-def bold(string):
-    return "\033[1m{0}\033[0m".format(string)
-
 
 # Formats numbers with a max precision 2 and removes trailing zeros
 def pretty_number(f):
@@ -173,18 +214,19 @@ def compare(inp, relate, cut):
 # Format will be {service_prefix} {cluster_name} {label} - {description}
 def build_service_description(description, cluster_name, label, config):
     service = ""
+    delimiter = "."
 
     if "service_prefix" in config:
-        service += config["service_prefix"]
+        service += "{0}{1}".format(config["service_prefix"], delimiter)
 
-    if config["service_include_cluster_name"] and cluster_name:
-        service += " {0}".format(cluster_name)
+    if config["service_include_cluster_name"]:
+        service += "{0}{1}".format(cluster_name, delimiter)
 
     if config["service_include_label"]:
-        service += " {0}".format(label)
+        service += "{0}{1}".format(label, delimiter)
 
-    if service != "":
-        service += " - "
+    #if service != "":
+    #    service += " - "
 
     service += description
 
@@ -207,14 +249,10 @@ def eval_status(value, critical, warning, op):
 
 # Evalutes data service stats and sends check results
 def process_data_stats(host, bucket, metrics, config, results):
-    s = couchbase_request(host, "/pools/default/buckets/{0}/stats".format(bucket), config)
+    s = couchbase_request(host, config["couchbase_admin_port"],  "/pools/default/buckets/{0}/stats".format(bucket), config)
     stats = s["op"]["samples"]
 
     for m in metrics:
-        m.setdefault("crit", None)
-        m.setdefault("warn", None)
-        m.setdefault("op", ">=")
-
         if m["metric"] == "percent_quota_utilization":
             value = avg(stats["mem_used"]) / (avg(stats["ep_mem_high_wat"]) * 1.0) * 100
         elif m["metric"] == "percent_metadata_utilization":
@@ -240,17 +278,13 @@ def process_data_stats(host, bucket, metrics, config, results):
 def process_xdcr_stats(host, tasks, config, results):
     for task in tasks:
         if task["type"] == "xdcr":
-            if "xdcr" not in config:
+            if "xdcr" not in config or config["xdcr"] is None:
                 log.warning("XDCR is running but no metrics are configured")
-                return
+                return results
 
             metrics = config["xdcr"]
 
             for m in metrics:
-                m.setdefault("crit", None)
-                m.setdefault("warn", None)
-                m.setdefault("op", ">=")
-
                 # task["id"] looks like this: {GUID}/{source_bucket}/{destination_bucket}
                 label = "xdcr {0}/{1}".format(task["id"].split("/")[1], task["id"].split("/")[2])
 
@@ -262,14 +296,14 @@ def process_xdcr_stats(host, tasks, config, results):
                     destination = requests.utils.quote("replications/{0}/{1}".format(task["id"], m["metric"]), safe="")
 
                     uri = "/pools/default/buckets/{0}/stats/{1}".format(task["source"], destination)
-                    stats = couchbase_request(host, uri, config)
+                    stats = couchbase_request(host, config["couchbase_admin_port"], uri, config)
 
                     for node in stats["nodeStats"]:
                         # node is formatted as host:port
                         if host == node.split(":")[0]:
                             if len(stats["nodeStats"][node]) == 0:
                                 log.error("Invalid XDCR metric: {0}".format(m["metric"]))
-                                return
+                                continue
 
                             value = avg(stats["nodeStats"][node])
                             results.append({"host": host, "metric": m, "value": value, "label": label})
@@ -281,16 +315,12 @@ def process_xdcr_stats(host, tasks, config, results):
 def process_query_stats(host, config, results):
     if "query" not in config:
         log.warning("Query service is running but no metrics are configured")
-        return
+        return results
 
     metrics = config["query"]
-    stats = couchbase_request(host, "/admin/stats", config, "query")
+    stats = couchbase_request(host, config["couchbase_query_port"],  "/admin/stats", config, "query")
 
     for m in metrics:
-        m.setdefault("crit", None)
-        m.setdefault("warn", None)
-        m.setdefault("op", ">=")
-
         if validate_metric(m, stats) is False:
             continue
 
@@ -305,15 +335,39 @@ def process_query_stats(host, config, results):
     return results
 
 
+# Evaluates FTS service stats and sends check results
+def process_fts_stats(host, config, results):
+    if "fts" not in config or config["fts"] is None:
+        log.warning("FTS service is running but no metrics are configured")
+        return results
+
+    metrics = config["fts"]
+    stats = couchbase_request(host, config["couchbase_fts_port"],  "/api/nsstats", config, "fts")
+
+    for m in metrics:
+        value = 0
+
+        # stat name is formatted "bucket:index:metric"
+        # we are only concerned about totals across all indexes
+        for stat in stats:
+            metric = stat.split(":")
+
+            if len(metric) != 3 or m["metric"] != metric[2]:
+                continue
+
+            label = "fts {0}:{1}".format(metric[0], metric[1])
+            value = stats[stat]
+
+            results.append({"host": host, "metric": m, "value": value, "label": label})
+
+    return results
+
+
 # Evaluates node stats and sends check results
 def process_node_stats(host, stats, config, results):
     metrics = config["node"]
 
     for m in metrics:
-        m.setdefault("crit", None)
-        m.setdefault("warn", None)
-        m.setdefault("op", "=")
-
         if validate_metric(m, stats) is False:
             continue
 
@@ -325,12 +379,7 @@ def process_node_stats(host, stats, config, results):
 
 
 # Executes a Couchbase REST API request and returns the output
-def couchbase_request(host, uri, config, service=None):
-    if service == "query":
-        port = config["couchbase_query_port"]
-    else:
-        port = config["couchbase_admin_port"]
-
+def couchbase_request(host, port, uri, config, service=None):
     if config["couchbase_ssl"]:
         protocol = "https"
     else:
@@ -366,11 +415,21 @@ def couchbase_request(host, uri, config, service=None):
 
 # Sends a passive check result to Nagios
 def send_nagios(results, cluster_name, config):
+    import subprocess
+
     for result in results:
         host = result["host"]
         metric = result["metric"]
         value = result["value"]
         label = result["label"]
+
+        metric.setdefault("crit", None)
+        metric.setdefault("warn", None)
+        metric.setdefault("op", ">=")
+
+        if metric["op"] not in [">", ">=", "=", "<=", "<"]:
+            log.warning("Skipped metric: \"{0}\", invalid operator: {1}".format(metric["description"], metric["op"]))
+            continue
 
         if isinstance(value, numbers.Number):
             value = pretty_number(value)
@@ -383,16 +442,16 @@ def send_nagios(results, cluster_name, config):
             continue
 
         line = "{0}\t{1}\t{2}\t{3}\n".format(host, service, status, message)
-        log.debug("{0} {1} {2} {3} {4} {5} {6} {7}".format(bold("Host:"), host, bold("Service:"), service, bold("Status:"), status, bold("Message:"), message))
+        log.debug("Host: {0} Service: {1} Status: {2} Message: {3}".format(host, service, status, message))
 
         if config["send_metrics"] is False:
             continue
 
-        if not os.path.exists(config["nsca_path"]):
-            print("Path to send_nsca is invalid: {0}".format(config["nsca_path"]))
+        if not os.path.exists(config["nagios_nsca_path"]):
+            print("Path to send_nsca is invalid: {0}".format(config["nagios_nsca_path"]))
             sys.exit(2)
 
-        cmd = "{0} -H {1} -p {2}".format(config["nsca_path"], str(config["monitor_host"]), str(config["monitor_port"]))
+        cmd = "{0} -H {1} -p {2}".format(config["nagios_nsca_path"], str(config["monitor_host"]), str(config["monitor_port"]))
 
         try:
             pipe = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -409,50 +468,39 @@ def send_nagios(results, cluster_name, config):
     print("OK - check_couchbase ran successfully")
 
 
-def main():
-    config = load_config()
+# Sends results to Graphite using the pickle protocol
+def send_graphite(results, cluster_name, config):
+    import pickle
+    import socket
+    import time
 
-    results = []
+    lines = []
+    timestamp = int(time.time())
 
-    tasks = couchbase_request(config["couchbase_host"], "/pools/default/tasks", config)
-    pools_default = couchbase_request(config["couchbase_host"], "/pools/default", config)
+    for result in results:
+        host = result["host"]
+        metric = result["metric"]
+        value = result["value"]
+        label = result["label"]
 
-    # clusterName is optional
-    if "clusterName" in pools_default:
-        cluster_name = pools_default["clusterName"]
-    else:
-        cluster_name = None
+        service = build_service_description(metric["description"], cluster_name, label, config).replace(" ", "-")
 
-    nodes = pools_default["nodes"]
-    for node in nodes:
-        if config["all_nodes"] is False and "thisNode" not in node:
+        if config["dump_services"]:
+            print(service)
             continue
 
-        # node is formatted a hostname:port
-        host = node["hostname"].split(":")[0]
-        services = node["services"]
+        line = "{0}.{1}.{2}.{3}.{4} {5} {6}".format(config["service_prefix"], cluster_name, host.replace(".", "-"), label.replace(" ", "-"), metric["description"].replace(" ", "-"), value, timestamp)
+        log.debug(line)
+        lines.append(line)
 
-        results = process_node_stats(host, node, config, results)
+    if config["send_metrics"] is False:
+        return
 
-        if "kv" in services:
-            results = process_xdcr_stats(host, tasks, config, results)
-
-            for item in config["data"]:
-                # _all is a special case where we process stats for all buckets
-                if item["bucket"] == "_all":
-                    for bucket in couchbase_request(host, "/pools/default/buckets?skipMap=true", config):
-                        results = process_data_stats(host, bucket["name"], item["metrics"], config, results)
-                else:
-                    results = process_data_stats(host, item["bucket"], item["metrics"], tasks, config, results)
-
-        if "n1ql" in services:
-            process_query_stats(host, config, results)
-
-    if config["monitor_type"] == "nagios":
-        send_nagios(results, cluster_name, config)
-    else:
-        print("Unknown monitor_type configured.  No metrics have been sent.")
-        sys.exit(2)
+    message = '\n'.join(lines) + '\n'
+    sock = socket.socket()
+    sock.connect((config["monitor_host"], config["monitor_port"]))
+    sock.sendall(message)
+    sock.close()
 
 
 if __name__ == "__main__":

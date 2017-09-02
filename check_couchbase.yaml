@@ -40,11 +40,10 @@ couchbase_ssl: False
 #  Options are:
 #   nagios
 #   graphite
-monitor_type: graphite
+monitor_type: nagios
 
 # IP address or hostname of the monitor server
-#monitor_host: 10.0.2.2
-monitor_host: 192.168.61.101
+monitor_host: 10.0.2.2
 
 # Monitor service port
 #  If Nagios, defaults are:
@@ -52,7 +51,7 @@ monitor_host: 192.168.61.101
 #   nsca-ng: 5668
 #  If Graphite, default is:
 #    carbon: 2003
-monitor_port: 2003
+monitor_port: 5668
 
 
 #

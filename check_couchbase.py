@@ -32,6 +32,8 @@ parser.add_argument("-d", "--dump-services",  dest="dump_services", action="stor
 parser.add_argument("-n", "--no-metrics",  dest="no_metrics", action="store_true", help="Do not send metrics to the monitoring host")
 parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="Enable debug logging to console")
 parser.add_argument("-C", "--couchbase-host",  dest="couchbase_host", action="store", help="Override the configured Couchbase host")
+parser.add_argument("-U", "--couchbase-user", dest="couchbase_user", action="store", help="Override the configured Couchbase admin username")
+parser.add_argument("-P", "--couchbase-password", dest="couchbase_password", action="store", help="Override the configured Couchbase admin password")
 parser.add_argument("-H", "--monitor-host",  dest="monitor_host", action="store", help="Override the configured monitoring host")
 parser.add_argument("-M", "--monitor-type", dest="monitor_type", action="store", help="Override the configured monitoring system type")
 args = parser.parse_args()
@@ -136,6 +138,12 @@ def load_config():
 
     if args.monitor_type:
         config["monitor_type"] = args.monitor_type
+
+    if args.couchbase_user:
+        config["couchbase_user"] = args.couchbase_user
+
+    if args.couchbase_password:
+        config["couchbase_password"] = args.couchbase_password
 
     if args.verbose:
         config["logging"]["handlers"]["console"]["level"] = "DEBUG"

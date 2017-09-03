@@ -43,7 +43,7 @@ usage: check_couchbase.py [options] -c CONFIG_FILE
 
 optional arguments:
   -h, --help            show this help message and exit
-  -a, --all-nodes       Return metrics for all nodes
+  -a, --all-nodes       Return metrics for all cluster nodes
   -c CONFIG_FILE, --config CONFIG_FILE
                         Path to the check_couchbase YAML file
   -d, --dump-services   Print service descriptions and exit
@@ -51,6 +51,10 @@ optional arguments:
   -v, --verbose         Enable debug logging to console
   -C COUCHBASE_HOST, --couchbase-host COUCHBASE_HOST
                         Override the configured Couchbase host
+  -U COUCHBASE_USER, --couchbase-user COUCHBASE_USER
+                        Override the configured Couchbase admin username
+  -P COUCHBASE_PASSWORD, --couchbase-password COUCHBASE_PASSWORD
+                        Override the configured Couchbase admin password
   -H MONITOR_HOST, --monitor-host MONITOR_HOST
                         Override the configured monitoring host
   -M MONITOR_TYPE, --monitor-type MONITOR_TYPE

@@ -20,7 +20,7 @@ Make sure the following properties match your environment:
 * couchbase_password
 * monitor_host
 * monitor_port
-* nsca_path
+* nagios_nsca_path
 
 Note that the user executing this script must have read access to /etc/send_nsca.cfg.
 
@@ -28,7 +28,7 @@ Note that the user executing this script must have read access to /etc/send_nsca
 You must have services configured in Nagios in order for the passive check results to be accepted.  The plugin allows you to customize the service description to match your Nagios configuration.  
 
 Service descriptions are built in the following format:
-{prefix} {cluster name} {label} - {metric description}
+{prefix}.{cluster name}.{label}.{metric description}
 
 The configuration file documents how the service description is built and how to customize it.
 

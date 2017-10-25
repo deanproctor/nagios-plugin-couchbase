@@ -1,3 +1,5 @@
+**This repo has moved to https://github.com/couchbase-partners/nagios-plugin-couchbase**
+
 # Couchbase Nagios Plugin
 A plugin to monitor Couchbase REST APIs and forward metrics to Nagios.
 
